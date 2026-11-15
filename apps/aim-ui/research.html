@@ -926,7 +926,7 @@ const LDESC = {static: 'Every source file compiles, config parses, no secrets in
   ui: 'Every button, link and input on the dashboard pages exercised in a real browser', links: 'Every connection on the map carried real traffic during this run and none is failing'};
 
 /* ---------- UI harness: clicks every button on the dashboard pages inside hidden same-origin frames ---------- */
-const DANGER = /\bdel\b|delete|remove|clear|wipe|reset|decay|stop|shutdown|kill|clone|run all|run ui|compare|think|understand|re-plan|generate|plan it|send|rescan|scan &|mic|talk|notify me|export|download|check novelty|what's missing|explain/i;
+const DANGER = /^-$|\bsave\b|\bdel\b|delete|remove|clear|wipe|reset|decay|stop|shutdown|kill|clone|run all|run ui|compare|think|understand|re-plan|generate|plan it|send|rescan|scan &|mic|talk|notify me|export|download|check novelty|what's missing|explain/i;
 function hookScript() {
   window.__err = [];
   window.addEventListener('error', e => __err.push('js error: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'));
