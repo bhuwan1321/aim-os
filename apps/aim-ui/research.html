@@ -953,7 +953,7 @@ async function harnessPage(page, tests, cov) {
   try {
     const loadErr = (w.__err || []).slice();
     add('page loads without JavaScript errors or failed requests', loadErr.length ? 'fail' : 'pass', loadErr.slice(0, 4).join(' | '));
-    const seen = new WeakSet(), sigs = new Set(); let marker = (w.__err || []).length; const deadline = performance.now() + 100000; let timedOut = 0;
+    const seen = new WeakSet(), sigs = new Set(); let marker = (w.__err || []).length; const deadline = performance.now() + (page === 'research.html' ? 300000 : 100000); let timedOut = 0;
     const sel = 'button, a[href], [onclick], input[type=button], input[type=submit], select, input[type=text], input[type=search], textarea, summary, [role=button]';
     const closeOverlays = async () => {
       d.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
@@ -1000,7 +1000,7 @@ async function harnessPage(page, tests, cov) {
       }
     }
     await pass(0);
-    if (timedOut) add('time budget reached', 'warn', timedOut + ' element(s) were not clicked because this page used its 100 s budget');
+    if (timedOut) add('time budget reached', 'warn', timedOut + ' element(s) were not clicked because this page used its time budget');
     await sleep(600);
     const late = (w.__err || []).slice(marker);
     if (late.length) add('no errors appeared after the interactions settled', 'fail', late.slice(0, 3).join(' | '));
@@ -1034,6 +1034,7 @@ $('#edClose').onclick = async () => {
 document.querySelectorAll('[data-et]').forEach(b => b.onclick = () => { if (ED.dirty && !confirm('Discard unsaved changes?')) return; ED.dirty = false; edTab(b.dataset.et); });
 function edTab(t) { ED.tab = t; document.querySelectorAll('[data-et]').forEach(b => b.classList.toggle('on', b.dataset.et === t)); if (t === 'project') edProject(); else edFiles(); }
 
+const $s = sel => $(sel) || {textContent: ''};   // the editor tab may have been switched while a request was in flight
 function edProject() {
   const g = P.graph, done = {}; ((LIVE && LIVE.completion && LIVE.completion.tasks) || []).forEach(t => { done[t.id] = t.done; });
   $('#edBody').innerHTML = `<div class="edp">
@@ -1049,15 +1050,15 @@ function edProject() {
     <div style="color:var(--txm);margin-top:4px">Removes it from the Research Center only. Files on disk are not touched.</div></div>`;
   const bindRm = () => document.querySelectorAll('#epTasks [data-rm]').forEach(b => b.onclick = () => b.parentElement.remove());
   bindRm();
-  $('#epSave').onclick = async () => { try { P = await api(`/projects/${P.id}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: $('#epName').value, idea: $('#epIdea').value, motive: $('#epWhy').value})}); P.graph.nodes = P.graph.nodes || []; P.graph.edges = P.graph.edges || []; $('#epMsg').textContent = 'saved'; $('#edTitle').textContent = 'EDIT - ' + P.name.toUpperCase(); $('#ptitle').textContent = P.name.toUpperCase(); loadProjects(); } catch (e) { $('#epMsg').textContent = e.message; } };
-  $('#epAdd').onclick = () => { const d = document.createElement('div'); d.className = 'trow2'; d.dataset.id = 'n' + Date.now().toString(36); d.dataset.auto = ''; d.innerHTML = '<input type="checkbox"><input type="text" value="" placeholder="new task"><span></span><button class="btn" data-rm>-</button>'; $('#epTasks').appendChild(d); bindRm(); d.querySelector('input[type=text]').focus(); };
+  $('#epSave').onclick = async () => { try { P = await api(`/projects/${P.id}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: $('#epName').value, idea: $('#epIdea').value, motive: $('#epWhy').value})}); P.graph.nodes = P.graph.nodes || []; P.graph.edges = P.graph.edges || []; $s('#epMsg').textContent = 'saved'; $('#edTitle').textContent = 'EDIT - ' + P.name.toUpperCase(); $('#ptitle').textContent = P.name.toUpperCase(); loadProjects(); } catch (e) { $s('#epMsg').textContent = e.message; } };
+  $('#epAdd').onclick = () => { const d = document.createElement('div'); d.className = 'trow2'; d.dataset.id = 'n' + Date.now().toString(36); d.dataset.auto = ''; d.innerHTML = '<input type="checkbox"><input type="text" value="" placeholder="new task"><span></span><button class="btn" data-rm>-</button>'; const tl = $('#epTasks'); if (!tl) return; tl.appendChild(d); bindRm(); d.querySelector('input[type=text]').focus(); };
   $('#epSaveT').onclick = async () => {
     const rows = [...document.querySelectorAll('#epTasks .trow2')].map(r => ({id: r.dataset.id, label: r.querySelector('input[type=text]').value.trim(), auto: r.dataset.auto || undefined, done: r.querySelector('input[type=checkbox]').checked, isAuto: !!r.dataset.auto})).filter(r => r.label);
     try {
       await api(`/projects/${P.id}/tasks`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tasks: rows.map(r => ({id: r.id, label: r.label, auto: r.auto}))})});
       for (const r of rows) if (!r.isAuto) await post(`/projects/${P.id}/override`, {key: 'task:' + r.id, value: r.done});
-      P = await api('/projects/' + P.id); P.graph.nodes = P.graph.nodes || []; P.graph.edges = P.graph.edges || []; P.graph.tasks = P.graph.tasks || []; await refreshLive(); $('#epTMsg').textContent = 'saved'; edProject();
-    } catch (e) { $('#epTMsg').textContent = e.message; }
+      P = await api('/projects/' + P.id); P.graph.nodes = P.graph.nodes || []; P.graph.edges = P.graph.edges || []; P.graph.tasks = P.graph.tasks || []; await refreshLive(); $s('#epTMsg').textContent = 'saved'; edProject();
+    } catch (e) { $s('#epTMsg').textContent = e.message; }
   };
   $('#epDel').onclick = async () => { if (!confirm('Delete project "' + P.name + '" from the Research Center?')) return; await api('/projects/' + P.id, {method: 'DELETE'}); $('#mEdit').classList.remove('show'); P = null; render(); loadProjects(); };
 }
