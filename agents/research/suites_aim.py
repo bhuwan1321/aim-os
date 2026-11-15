@@ -475,6 +475,31 @@ def bus_tests(ctx):
         check(not [x for x in h.json() if x.get("source") == low], "low-confidence notification was NOT filtered", "dropped", "delivered")
     out.append(T("bus", "notification: delivered, cooldown suppresses repeats, low confidence filtered", notify_bus))
 
+    async def survives_drop(ctx):
+        ctx.cleanups.append(lambda: ctx.call("DELETE", U("notification", "/history/test")))
+        ctx.cleanups.append(lambda: ctx.call("DELETE", U("timeline", "/events/test")))
+        r = rclient()
+        try:
+            killed = await r.client_kill_filter(_type="pubsub")
+        finally:
+            await r.aclose()
+        ctx.note(f"dropped {killed} pub/sub connection(s)")
+        await asyncio.sleep(6)                  # listeners reconnect after ~2 s
+        src = f"{MARK}-drop-{uuid.uuid4().hex[:6]}"
+        await pub("aim.notification.send", {"title": MARK, "message": f"{MARK} after drop", "confidence": 0.9, "source": src})
+        await pub("aim.timeline.event", {"event_type": "aimtest.drop", "description": f"{MARK} after drop"})
+
+        async def n_ok():
+            h = await ctx.call("GET", U("notification", "/history?limit=50"))
+            return any(x.get("source") == src for x in h.json())
+
+        async def t_ok():
+            e = await ctx.call("GET", U("timeline", "/events?event_type=aimtest.drop&limit=5"))
+            return e.status == 200 and bool(e.json())
+        check(await until(n_ok, 8), "notification service never recovered its bus listener after Redis dropped its connections", "delivered", "lost")
+        check(await until(t_ok, 8), "timeline service never recovered its bus listener after Redis dropped its connections", "stored", "lost")
+    out.append(T("bus", "services reconnect their bus listeners after Redis drops every pub/sub connection", survives_drop, timeout=60))
+
     async def timeline_bus(ctx):
         ctx.cleanups.append(lambda: ctx.call("DELETE", U("timeline", "/events/test")))
         await pub("aim.timeline.event", {"event_type": "aimtest.bus", "description": f"{MARK} via redis"})

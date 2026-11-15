@@ -135,6 +135,18 @@ async def shutdown():
 # ── Event listener ────────────────────────────────
 
 async def listen_events():
+    """Keeps the bus listener alive: a dropped Redis connection must never silently stop event handling."""
+    while True:
+        try:
+            await _listen_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("event listener restarting after %s", type(e).__name__)
+            await asyncio.sleep(2)
+
+
+async def _listen_once():
     await asyncio.sleep(2)
     pubsub = redis_client.pubsub()
     await pubsub.subscribe("aim.timeline.event")
@@ -149,8 +161,8 @@ async def listen_events():
                 event_type=data.get("event_type", "unknown"),
                 description=data.get("description", ""),
                 app=data.get("app"),
-                project_id=data.get("project"),
-                metadata=data.get("metadata", {}),
+                project_id=data.get("project") if _UUID_RX.match(str(data.get("project") or "")) else None,
+                metadata={**(data.get("metadata") or {}), **({"project_name": data.get("project")} if data.get("project") and not _UUID_RX.match(str(data.get("project"))) else {})},
                 focus_score=data.get("focus_score", 0.0)
             ))
         except Exception as e:

@@ -943,7 +943,7 @@ async def _run_suite(p, run, req):
         layers = []
         for lid, name, desc in tester.LAYERS:
             ts = groups.get(lid) or (placeholders.get(lid, []) if aim else [])
-            if ts:
+            if ts or (aim and lid == "links"):
                 layers.append({"id": lid, "name": name, "desc": desc, "tests": ts})
         run["layers"] = layers
         flat = [t for l in layers for t in l["tests"] if l["id"] not in ("ui", "links", "resilience")]
@@ -1736,6 +1736,18 @@ async def already_researched(query: str) -> bool:
 
 
 async def listen_events():
+    """Keeps the bus listener alive: a dropped Redis connection must never silently stop event handling."""
+    while True:
+        try:
+            await _listen_once()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("event listener restarting after %s", type(e).__name__)
+            await asyncio.sleep(2)
+
+
+async def _listen_once():
     await asyncio.sleep(2)
     pubsub = redis_client.pubsub()
     await pubsub.subscribe("aim.research.request")
