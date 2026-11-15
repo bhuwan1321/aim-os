@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/><title>AIM OS — JARVIS Interface</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+    
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --c:#00d4ff;--cg:rgba(0,212,255,0.12);--cd:rgba(0,212,255,0.06);
+  --bg:#020b14;--bg2:#030f1c;--bg3:#041525;
+  --tx:#c8eeff;--txd:#4a7a9b;--txm:#1a3a52;
+  --bord:rgba(0,212,255,0.18);--bords:rgba(0,212,255,0.38);
+  --green:#00ff88;--amber:#ffaa00;--red:#ff3355;
+}
+html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Share Tech Mono',monospace;overflow:hidden}
+
+/* ── SCANLINES ── */
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);
+}
+
+/* ── MAIN GRID ── */
+.shell{
+  display:grid;
+  grid-template-columns:220px 1fr 220px;
+  grid-template-rows:52px 1fr 200px;
+  height:100vh;gap:1px;background:var(--bord);
+}
+
+/* ── CORNER BRACKETS ── */
+.cbracket{position:fixed;width:20px;height:20px;z-index:100;pointer-events:none}
+.cbracket.tl{top:4px;left:4px;border-top:1.5px solid var(--c);border-left:1.5px solid var(--c)}
+.cbracket.tr{top:4px;right:4px;border-top:1.5px solid var(--c);border-right:1.5px solid var(--c)}
+.cbracket.bl{bottom:4px;left:4px;border-bottom:1.5px solid var(--c);border-left:1.5px solid var(--c)}
+.cbracket.br{bottom:4px;right:4px;border-bottom:1.5px solid var(--c);border-right:1.5px solid var(--c)}
+
+/* ── HEADER ── */
+header{
+  grid-column:1/-1;background:var(--bg2);
+  display:flex;align-items:center;padding:0 18px;gap:14px;
+  border-bottom:1px solid var(--bords);position:relative;overflow:hidden;
+}
+header::before{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--c),transparent);
+  animation:hline 4s ease-in-out infinite;
+}
+@keyframes hline{0%,100%{opacity:.15}50%{opacity:.9}}
+.logo{font-family:'Orbitron',monospace;font-size:18px;font-weight:900;letter-spacing:10px;
+  color:var(--c);text-shadow:0 0 18px var(--c),0 0 36px rgba(0,212,255,.35)}
+.hsubtitle{font-size:9px;letter-spacing:3px;color:var(--txd)}
+.hchips{display:flex;gap:16px;margin-left:auto;align-items:center}
+.chip{font-size:9px;letter-spacing:2px;color:var(--txd);display:flex;align-items:center;gap:5px}
+.hchip-sep{width:1px;height:14px;background:var(--bord)}
+.dot{width:5px;height:5px;border-radius:50%;background:var(--c);box-shadow:0 0 6px var(--c);animation:pd 2s ease-in-out infinite}
+.dot.gn{background:var(--green);box-shadow:0 0 6px var(--green);animation-delay:1s}
+.dot.red{background:var(--red);box-shadow:0 0 6px var(--red)}
+.dot.gn{background:var(--green);box-shadow:0 0 6px var(--green);animation-delay:1s}
+@keyframes pd{0%,100%{opacity:1}50%{opacity:.25}}
+#clock{font-family:'Orbitron',monospace;font-size:12px;color:var(--c);letter-spacing:3px;text-shadow:0 0 10px rgba(0,212,255,.5);min-width:80px}
+
+/* ── PANEL LABEL ── */
+.plabel{font-size:9px;letter-spacing:3px;color:var(--txm);text-transform:uppercase;margin-bottom:10px;
+  display:flex;align-items:center;gap:8px}
+.plabel::after{content:'';flex:1;height:1px;background:var(--bord)}
+
+/* ── LEFT ── */
+.left{background:var(--bg2);padding:14px 12px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;position:relative}
+.left::after{content:'';position:absolute;top:0;right:0;bottom:0;width:1px;
+  background:linear-gradient(180deg,transparent,var(--bords) 20%,var(--bords) 80%,transparent)}
+
+.proj{padding:8px 10px;border:1px solid var(--bord);background:var(--bg3);cursor:pointer;transition:.2s;margin-bottom:4px;position:relative;overflow:hidden}
+.proj::before{content:'';position:absolute;top:0;left:0;bottom:0;width:2px;background:var(--txm);transition:.2s}
+.proj:hover::before,.proj.act::before{background:var(--c);box-shadow:0 0 8px var(--c)}
+.proj:hover,.proj.act{border-color:rgba(0,212,255,0.4);background:var(--cg)}
+.pname{font-family:'Orbitron',monospace;font-size:11px;letter-spacing:1px;color:var(--tx);margin-bottom:2px}
+.pmeta{font-size:9px;color:var(--txm);margin-bottom:5px}
+.pstatus{display:inline-block;font-size:8px;letter-spacing:2px;padding:1px 7px;border:1px solid;margin-bottom:5px}
+.pstatus.live{color:var(--green);border-color:var(--green)}
+.pstatus.active{color:var(--c);border-color:var(--c)}
+.pstatus.paused{color:var(--amber);border-color:var(--amber)}
+.pstatus.done{color:var(--txd);border-color:var(--txd)}
+
+.mini-chart{margin-top:4px}
+.bar-row{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.bar-label{font-size:9px;color:var(--txd);width:68px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;height:3px;background:var(--bg);overflow:hidden}
+.bar-fill{height:100%;background:linear-gradient(90deg,rgba(0,150,255,.6),var(--c));box-shadow:0 0 5px rgba(0,212,255,.4);transition:width 1.2s ease}
+.bar-val{font-size:9px;color:var(--txd);width:26px;text-align:right}
+
+.plan-item{padding:6px 9px;border:1px solid var(--bord);margin-bottom:4px;display:flex;align-items:center;gap:8px;transition:.15s}
+.plan-item:hover{border-color:rgba(0,212,255,.3);background:var(--cd)}
+.plan-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.plan-dot.done{background:var(--green);box-shadow:0 0 5px var(--green)}
+.plan-dot.act{background:var(--c);box-shadow:0 0 5px var(--c);animation:pd 1s ease-in-out infinite}
+.plan-dot.todo{background:var(--txm)}
+.plan-tx{font-size:10px;color:var(--txd)}
+.plan-tx.done-tx{color:var(--txm);text-decoration:line-through}
+
+/* ── CENTER ── */
+.center{
+  background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+.center::before{
+  content:'';position:absolute;inset:0;
+  background-image:linear-gradient(rgba(0,212,255,0.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,212,255,0.04) 1px,transparent 1px);
+  background-size:38px 38px;
+}
+.cscan{position:absolute;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,212,255,.2),transparent);
+  animation:cscanmv 7s linear infinite;pointer-events:none;z-index:2}
+@keyframes cscanmv{from{top:-1px}to{top:100%}}
+
+.camb{position:absolute;width:360px;height:360px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,60,140,.08) 0%,transparent 70%);
+  pointer-events:none;opacity:.6}
+
+/* ── ARC REACTOR ZONE ── */
+.arc-wrap{
+    width:340px;
+    height:340px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    transform:none !important;
+    animation:none !important;
+}
+
+/* Outer tick ring */
+.ticks{position:absolute;width:260px;height:260px;pointer-events:none}
+.tick{position:absolute;left:50%;top:0;width:1.5px;height:7px;
+  background:rgba(0,212,255,.3);transform-origin:50% 130px;margin-left:-.75px;border-radius:1px}
+.tick.major{height:12px;background:var(--c);opacity:.7;box-shadow:0 0 4px var(--c)}
+
+/* HUD rings */
+.hring{position:absolute;border-radius:50%;pointer-events:none}
+@keyframes rr{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes rr2{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
+@keyframes rpulse{0%,100%{opacity:.1}50%{opacity:.35}}
+@keyframes rdash{0%{stroke-dashoffset:0}100%{stroke-dashoffset:100}}
+
+/* Ring 1 — outermost slow dashed */
+.hr1{width:260px;height:260px;opacity:.07;border-style:dashed;animation:rr 45s linear infinite, rpulse 6s ease-in-out infinite}
+.hr2{width:240px;height:240px;border:1px solid transparent;border-top-color:rgba(0,212,255,.5);border-right-color:rgba(0,212,255,.2);border-bottom-color:rgba(0,212,255,.5);border-left-color:rgba(0,212,255,.2);animation:rr2 18s linear infinite;box-shadow:0 0 8px rgba(0,212,255,.1)}
+.hr3{width:220px;height:220px;border:1px dashed rgba(0,212,255,.15);animation:rr 12s linear infinite, rpulse 4s ease-in-out infinite 1s}
+.hr4{width:200px;height:200px;border:1.5px solid transparent;border-top-color:var(--c);border-bottom-color:rgba(0,212,255,.3);border-left-color:transparent;border-right-color:transparent;animation:rr2 8s linear infinite;filter:drop-shadow(0 0 3px rgba(0,212,255,.6))}
+.hr5{width:182px;height:182px;border:2px solid transparent;border-top-color:rgba(0,212,255,.9);border-right-color:rgba(0,212,255,.4);border-bottom-color:rgba(0,212,255,.1);border-left-color:rgba(0,212,255,.4);animation:rr 5s linear infinite;filter:drop-shadow(0 0 5px rgba(0,212,255,.5))}
+.hr6{width:162px;height:162px;border:1px dashed rgba(0,212,255,.25);animation:rr2 7s linear infinite, rpulse 3s ease-in-out infinite .5s}
+.hr7{width:144px;height:144px;border:1.5px solid transparent;border-top-color:rgba(0,212,255,.7);border-left-color:rgba(0,212,255,.3);border-bottom-color:transparent;border-right-color:transparent;animation:rr 3.5s linear infinite;filter:drop-shadow(0 0 4px rgba(0,212,255,.7))}
+
+/* ── MODEL SLOT — transparent, no background, no glow ball ── */
+.arc-model-slot{
+    width:340px;
+    height:340px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:transparent;
+    transform:none !important;
+    animation:none !important;
+    will-change:filter;
+}
+
+/* Orb glow states — only outer ring glow, not filled ball */
+.arc-model-slot.idle{
+  filter:drop-shadow(0 0 12px rgba(0,212,255,.5));
+}
+.arc-model-slot.thinking{
+  filter:drop-shadow(0 0 22px rgba(0,212,255,.8));
+}
+.arc-model-slot.speaking{
+  filter:drop-shadow(0 0 30px rgba(0,212,255,1));
+}
+
+/* model-viewer fills the slot */
+.arc-model-slot model-viewer{
+  width:320px;height:320px;
+  border-radius:50%;
+  background:transparent;
+  --poster-color:transparent;
+}
+
+/* Fallback triangle (shown only when no model-viewer present) */
+.arc-fallback{
+  display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;
+  border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#1a6fff,#0a2860 55%,#020c1e);
+  box-shadow:0 0 28px #0a4fff,0 0 55px rgba(0,90,255,.35),inset 0 0 28px rgba(0,90,255,.25);
+}
+.arc-tri{
+  width:0;height:0;
+  border-left:24px solid transparent;border-right:24px solid transparent;
+  border-bottom:40px solid rgba(0,212,255,.9);
+  filter:drop-shadow(0 0 10px #00d4ff) drop-shadow(0 0 20px rgba(0,212,255,.6));
+  transform:translateY(3px);
+}
+
+/* Sound waves */
+.swaves{display:flex;gap:3px;align-items:flex-end;height:26px;opacity:0;transition:opacity .3s;margin-top:12px}
+.swaves.on{opacity:1}
+.sw{width:3px;background:var(--c);border-radius:1px;box-shadow:0 0 5px var(--c);animation:swb .4s ease-in-out infinite alternate}
+.sw:nth-child(1){animation-delay:.00s}.sw:nth-child(2){animation-delay:.07s}
+.sw:nth-child(3){animation-delay:.03s}.sw:nth-child(4){animation-delay:.10s}
+.sw:nth-child(5){animation-delay:.05s}.sw:nth-child(6){animation-delay:.08s}
+.sw:nth-child(7){animation-delay:.02s}.sw:nth-child(8){animation-delay:.06s}
+@keyframes swb{from{height:3px;opacity:.3}to{height:22px;opacity:1}}
+
+.arc-status-row{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:8px}
+.arc-status{font-size:10px;letter-spacing:5px;color:var(--c);text-shadow:0 0 10px rgba(0,212,255,.4);text-transform:uppercase;transition:text-shadow .4s ease,color .4s ease}
+.arc-status.thinking{color:#fff;text-shadow:0 0 20px var(--c),0 0 40px var(--c)}
+.arc-status.speaking{color:#fff;text-shadow:0 0 30px var(--c),0 0 60px rgba(0,212,255,.8)}
+.arc-sub{font-size:8px;letter-spacing:2px;color:var(--txd)}
+
+/* Corner readouts */
+.arc-corners{position:absolute;inset:0;pointer-events:none}
+.ac{position:absolute;font-size:7px;color:var(--txd);letter-spacing:1px;line-height:1.6}
+.ac span{color:var(--c);font-family:'Orbitron',monospace;font-size:8px;display:block}
+.ac.tl{top:18px;left:14px}
+.ac.tr{top:18px;right:14px;text-align:right}
+.ac.bl{bottom:18px;left:14px}
+.ac.br{bottom:18px;right:14px;text-align:right}
+
+/* Bottom pills */
+.center-pill{position:absolute;bottom:14px;display:flex;gap:8px}
+.cpill{font-size:8px;letter-spacing:2px;color:var(--txd);padding:3px 12px;border:1px solid var(--bord);background:var(--cd)}
+
+/* ── RIGHT ── */
+.right{background:var(--bg2);padding:14px 12px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;position:relative}
+.right::before{content:'';position:absolute;top:0;left:0;bottom:0;width:1px;
+  background:linear-gradient(180deg,transparent,var(--bords) 20%,var(--bords) 80%,transparent)}
+
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.stat{background:var(--bg3);border:1px solid var(--bord);padding:8px;text-align:center;position:relative;overflow:hidden}
+.stat::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--c),transparent);opacity:.4}
+.sval{font-family:'Orbitron',monospace;font-size:17px;color:var(--c);text-shadow:0 0 8px rgba(0,212,255,.5);line-height:1}
+.slbl{font-size:8px;color:var(--txm);letter-spacing:1.5px;margin-top:3px;text-transform:uppercase}
+
+.spark-wrap{background:var(--bg3);border:1px solid var(--bord);padding:10px}
+.spark-title{font-size:9px;color:var(--txm);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px}
+
+.tl-item{display:flex;gap:9px;align-items:flex-start;position:relative;padding-bottom:12px}
+.tl-item::before{content:'';position:absolute;left:13px;top:18px;bottom:0;width:1px;background:var(--bord)}
+.tl-item:last-child::before{display:none}
+.tl-dot{width:5px;height:5px;border-radius:50%;background:var(--c);box-shadow:0 0 5px var(--c);margin-top:4px;flex-shrink:0;margin-left:10px}
+.tl-t{font-size:9px;color:var(--c);letter-spacing:1px;font-family:'Orbitron',monospace}
+.tl-d{font-size:10px;color:var(--txd);margin-top:2px;line-height:1.45}
+
+.mem{padding:7px 9px;border-left:2px solid var(--c);background:var(--cd);margin-bottom:4px}
+.memtx{font-size:10px;color:var(--txd);line-height:1.5}
+.memscore{font-size:8px;color:var(--c);margin-top:3px;letter-spacing:1px}
+
+/* ── CHAT ── */
+.chat{grid-column:1/-1;background:var(--bg2);border-top:1px solid var(--bords);display:flex;flex-direction:column;position:relative}
+.chat::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--c),transparent);opacity:.5}
+
+.msgs{flex:1;overflow-y:auto;padding:10px 20px;display:flex;flex-direction:column;gap:7px;
+  scrollbar-width:thin;scrollbar-color:var(--bord) transparent}
+.msg{display:flex;gap:10px;align-items:flex-start;max-width:100%;width:100%}
+.msg.aim{align-self:flex-start}
+.msg.usr{align-self:flex-end;flex-direction:row-reverse}
+.av{width:26px;height:26px;border-radius:50%;border:1px solid var(--c);background:var(--cd);
+  display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--c);
+  flex-shrink:0;box-shadow:0 0 7px rgba(0,212,255,.25);letter-spacing:1px}
+.bub{padding:9px 13px;max-width:760px;line-height:1.75;font-size:13px;color:var(--tx)}
+.msg.aim .bub{background:var(--bg3);border:1px solid var(--bords);border-left:2px solid var(--c);box-shadow:0 0 14px var(--cd)}
+.msg.usr .bub{background:var(--cd);border:1px solid var(--c)}
+.mt{font-size:8px;color:var(--txm);margin-top:3px;letter-spacing:1px}
+.cursor::after{content:'▋';color:var(--c);animation:bl .65s step-end infinite}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:0}}
+
+.ibar{padding:8px 16px;border-top:1px solid var(--bord);display:flex;gap:10px;align-items:center;background:var(--bg);flex-shrink:0}
+.ipfx{font-size:13px;color:var(--c);text-shadow:0 0 5px var(--c)}
+.inp{flex:1;background:transparent;border:none;outline:none;color:var(--tx);
+  font-family:'Share Tech Mono',monospace;font-size:13px;caret-color:var(--c);letter-spacing:.5px}
+.inp::placeholder{color:var(--txm)}
+.sbtn{background:transparent;border:1px solid var(--c);color:var(--c);
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2.5px;
+  padding:6px 16px;cursor:pointer;text-transform:uppercase;transition:.2s;box-shadow:0 0 7px var(--cd)}
+.sbtn:hover{background:var(--cg);box-shadow:0 0 16px rgba(0,212,255,.28)}
+
+::-webkit-scrollbar{width:2px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bord)}
+</style>
+</head>
+<body>
+
+<div class="cbracket tl"></div>
+<div class="cbracket tr"></div>
+<div class="cbracket bl"></div>
+<div class="cbracket br"></div>
+
+<div class="shell">
+
+<!-- ══ HEADER ══ -->
+<header>
+  <div class="logo">AIM</div>
+  <div class="hsubtitle">ARTIFICIAL INTELLIGENCE MEMORY · OS v0.1</div>
+  <div class="hchips">
+<div class="chip"><span class="dot gn" id="dot-brain"></span>BRAIN</div>
+    <div class="chip"><span class="dot" id="dot-memory"></span>MEMORY</div>
+    <div class="chip"><span class="dot" id="dot-redis"></span>REDIS</div>
+    <div class="hchip-sep"></div>
+    <a href="research.html" id="btnResearch" title="Open Research Mode: project map, health, completion, novelty" style="background:rgba(0,212,255,.12);border:1px solid var(--c);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:9px;padding:3px 12px;cursor:pointer;letter-spacing:2px;text-decoration:none;text-transform:uppercase">RESEARCH MODE</a>
+    <button onclick="openNotifModal()" style="background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:8px;padding:3px 10px;cursor:pointer;letter-spacing:1px;position:relative;" id="notifBell">
+      ALERTS <span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 6px var(--red);"></span>
+    </button>
+    <div id="clock">00:00:00</div>
+  </div>
+</header>
+
+<!-- ══ LEFT ══ -->
+<aside class="left">
+  <div>
+    <div class="plabel">Projects</div>
+    <div class="proj act">
+      <div class="pname">AIM-OS</div>
+      <div class="pmeta">Docker Stack · Local</div>
+      <span class="pstatus active">ACTIVE</span>
+      <div class="mini-chart">
+        <div class="bar-row"><span class="bar-label">Services</span><div class="bar-track"><div class="bar-fill" style="width:75%"></div></div><span class="bar-val">6/8</span></div>
+        <div class="bar-row"><span class="bar-label">Memory</span><div class="bar-track"><div class="bar-fill" style="width:60%"></div></div><span class="bar-val">12</span></div>
+        <div class="bar-row"><span class="bar-label">Progress</span><div class="bar-track"><div class="bar-fill" style="width:55%"></div></div><span class="bar-val">55%</span></div>
+      </div>
+    </div>
+    <div class="proj">
+      <div class="pname">RAG Pipeline</div>
+      <div class="pmeta">Abhinavana Tech</div>
+      <span class="pstatus paused">PAUSED</span>
+      <div class="mini-chart">
+        <div class="bar-row"><span class="bar-label">Accuracy</span><div class="bar-track"><div class="bar-fill" style="width:88%"></div></div><span class="bar-val">88%</span></div>
+        <div class="bar-row"><span class="bar-label">Models</span><div class="bar-track"><div class="bar-fill" style="width:90%"></div></div><span class="bar-val">3</span></div>
+      </div>
+    </div>
+    <div class="proj">
+      <div class="pname">ICMACC 2026</div>
+      <div class="pmeta">IEEE Conference</div>
+      <span class="pstatus live">LIVE</span>
+      <div class="mini-chart">
+        <div class="bar-row"><span class="bar-label">Traffic</span><div class="bar-track"><div class="bar-fill" style="width:92%"></div></div><span class="bar-val">High</span></div>
+        <div class="bar-row"><span class="bar-label">Uptime</span><div class="bar-track"><div class="bar-fill" style="width:99%"></div></div><span class="bar-val">99%</span></div>
+      </div>
+    </div>
+    <div class="proj">
+      <div class="pname">Sintillashunz</div>
+      <div class="pmeta">1000s registered</div>
+      <span class="pstatus done">DONE</span>
+      <div class="mini-chart">
+        <div class="bar-row"><span class="bar-label">Registrations</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span class="bar-val">✓</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="plabel">Build Plan</div>
+    <div class="plan-item"><div class="plan-dot done"></div><div class="plan-tx done-tx">Install Docker + NVIDIA driver</div></div>
+    <div class="plan-item"><div class="plan-dot done"></div><div class="plan-tx done-tx">Build LLM Router service</div></div>
+    <div class="plan-item"><div class="plan-dot done"></div><div class="plan-tx done-tx">Build Memory Engine</div></div>
+    <div class="plan-item"><div class="plan-dot act"></div><div class="plan-tx">Build JARVIS UI ← now</div></div>
+    <div class="plan-item"><div class="plan-dot todo"></div><div class="plan-tx">Connect React Dashboard</div></div>
+    <div class="plan-item"><div class="plan-dot todo"></div><div class="plan-tx">Launch docker compose</div></div>
+    <div class="plan-item"><div class="plan-dot todo"></div><div class="plan-tx">Host bridge + screen agent</div></div>
+  </div>
+</aside>
+
+<!-- ══ CENTER ══ -->
+<main class="center">
+  <div class="cscan"></div>
+  <div class="camb"></div>
+
+  <!-- Corner readouts -->
+  <div class="arc-corners">
+    <div class="ac tl">LLM ROUTER<span id="llm-val">GROQ · 70B</span></div>
+    <div class="ac tr">CPU / RAM<span id="sysstat-val">-- / --</span></div>
+    <div class="ac bl">ACTIVE APP<span id="activeapp-val">--</span></div>
+    <div class="ac br">VRAM FREE<span id="vram-val">2.4 GB</span></div>
+  </div>
+
+  <!-- Arc reactor wrap -->
+  <div class="arc-wrap">
+    <div class="ticks" id="ticks"></div>
+    <div class="hring hr1"></div>
+    <div class="hring hr2"></div>
+    <div class="hring hr3"></div>
+    <div class="hring hr4"></div>
+    <div class="hring hr5"></div>
+    <div class="hring hr6"></div>
+    <div class="hring hr7"></div>
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  YOUR 3D MODEL GOES HERE                                    ║
+    ║  Step 1: Add this script in <head>:                         ║
+    ║    <script type="module"                                    ║
+    ║      src="https://unpkg.com/@google/model-viewer/           ║
+    ║           dist/model-viewer.min.js"></script>               ║
+    ║  Step 2: Replace the .arc-fallback div below with:          ║
+    ║    <model-viewer                                            ║
+    ║      src="arc-reactor.glb"                                  ║
+    ║      auto-rotate                                            ║
+    ║      rotation-per-second="20deg"                            ║
+    ║      disable-zoom                                           ║
+    ║      style="width:220px;height:220px;                       ║
+    ║             background:transparent;">                        ║
+       </model-viewer>                                         
+    -->
+    <div class="arc-model-slot idle" id="core">
+      <!-- REPLACE THIS DIV WITH YOUR MODEL-VIEWER TAG -->
+  <svg viewBox="0 0 200 200" width="220" height="220" style="position:absolute;pointer-events:none">
+  <!-- Outer glow ring -->
+  <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(0,212,255,0.15)" stroke-width="1"/>
+  <!-- Main body -->
+  <circle cx="100" cy="100" r="72" fill="#020e1f" stroke="rgba(0,212,255,0.5)" stroke-width="1.5"/>
+  <!-- Inner ring -->
+  <circle cx="100" cy="100" r="58" fill="none" stroke="rgba(0,212,255,0.3)" stroke-width="1"/>
+  <!-- Rotating segment ring -->
+  <g style="transform-origin:100px 100px;animation:rr 8s linear infinite">
+    <circle cx="100" cy="100" r="65" fill="none" stroke="transparent" stroke-width="8"
+      stroke-dasharray="12 8" style="stroke:rgba(0,212,255,0.4)"/>
+  </g>
+  <!-- Counter rotating inner segments -->
+  <g style="transform-origin:100px 100px;animation:rr2 5s linear infinite">
+    <circle cx="100" cy="100" r="50" fill="none" stroke="transparent" stroke-width="6"
+      stroke-dasharray="8 10" style="stroke:rgba(0,212,255,0.3)"/>
+  </g>
+  <!-- Triangle 1 -->
+  <polygon points="100,42 130,90 70,90"
+    fill="rgba(0,180,255,0.12)" stroke="rgba(0,212,255,0.8)" stroke-width="1.2"
+    style="filter:drop-shadow(0 0 4px #00d4ff)"/>
+  <!-- Triangle 2 rotated 60deg -->
+  <polygon points="100,42 130,90 70,90"
+    fill="rgba(0,180,255,0.12)" stroke="rgba(0,212,255,0.5)" stroke-width="1"
+    transform="rotate(-120,100,100)"/>
+  <!-- Triangle 3 rotated 120deg -->
+  <polygon points="100,42 130,90 70,90"
+    fill="rgba(0,180,255,0.12)" stroke="rgba(0,212,255,0.5)" stroke-width="1"
+    transform="rotate(120,100,100)"/>
+  <!-- Center core -->
+  <circle cx="100" cy="100" r="18" fill="#020e1f" stroke="rgba(0,212,255,0.6)" stroke-width="1.5"/>
+  <circle cx="100" cy="100" r="12"
+    fill="rgba(0,180,255,0.3)" stroke="rgba(0,212,255,0.9)" stroke-width="1"
+    style="animation:corepulse 2s ease-in-out infinite"/>
+  <circle cx="100" cy="100" r="6" fill="rgba(0,212,255,0.9)"
+    style="filter:drop-shadow(0 0 6px #00d4ff);animation:corepulse 2s ease-in-out infinite"/>
+  <!-- Spoke lines -->
+  <line x1="100" y1="28" x2="100" y2="42" stroke="rgba(0,212,255,0.5)" stroke-width="1"/>
+  <line x1="100" y1="28" x2="100" y2="42" stroke="rgba(0,212,255,0.5)" stroke-width="1" transform="rotate(60,100,100)"/>
+  <line x1="100" y1="28" x2="100" y2="42" stroke="rgba(0,212,255,0.5)" stroke-width="1" transform="rotate(120,100,100)"/>
+  <line x1="100" y1="28" x2="100" y2="42" stroke="rgba(0,212,255,0.5)" stroke-width="1" transform="rotate(180,100,100)"/>
+  <line x1="100" y1="28" x2="100" y2="42" stroke="rgba(0,212,255,0.5)" stroke-width="1" transform="rotate(240,100,100)"/>
+  <line x1="100" y1="28" x2="100" y2="42" stroke="rgba(0,212,255,0.5)" stroke-width="1" transform="rotate(300,100,100)"/>
+</svg>
+<style>
+@keyframes corepulse{
+  0%,100%{opacity:.7;r:6}
+  50%{opacity:1;r:8}
+}
+</style>
+    </div>
+
+  </div>
+
+  <!-- Sound waves + status -->
+  <div class="swaves" id="swaves">
+    <div class="sw"></div><div class="sw"></div><div class="sw"></div><div class="sw"></div>
+    <div class="sw"></div><div class="sw"></div><div class="sw"></div><div class="sw"></div>
+  </div>
+  <div class="arc-status-row">
+    <div class="arc-status" id="arcst">STANDING BY</div>
+    <div class="arc-sub">ALL SYSTEMS NOMINAL · RTX 2050 · CUDA 13.3</div>
+  </div>
+
+  <div class="center-pill">
+    <div class="cpill">SESSION ACTIVE</div>
+    <div class="cpill" id="uptimePill">UPTIME 00:00:00</div>
+    <div class="cpill">AES-256 ENC</div>
+  </div>
+</main>
+
+<!-- ══ RIGHT ══ -->
+<aside class="right">
+  <div>
+    <div class="plabel">Session Stats</div>
+    <div class="stats">
+      <div class="stat"><div class="sval" id="sv1">0</div><div class="slbl">Services</div></div>
+      <div class="stat"><div class="sval" id="sv2">0</div><div class="slbl">Memories</div></div>
+      <div class="stat"><div class="sval" id="sv3">87%</div><div class="slbl">Focus</div></div>
+      <div class="stat"><div class="sval" id="sv4">0h</div><div class="slbl">Session</div></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="spark-wrap">
+      <div class="spark-title">Activity — last 8 hours</div>
+      <canvas id="spark" width="240" height="50"></canvas>
+    </div>
+  </div>
+
+  <div>
+    <div class="plabel">Today's Timeline</div>
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div><div class="tl-t">03:13</div><div class="tl-d">AIM-OS folder structure created on D:\</div></div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div><div class="tl-t">02:34</div><div class="tl-d">CUDA 13.3 driver 610.62 verified</div></div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div><div class="tl-t">02:20</div><div class="tl-d">Docker Desktop 29.5.3 installed</div></div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div><div class="tl-t">01:45</div><div class="tl-d">NVIDIA driver updated → 610.62</div></div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div><div class="tl-t">01:10</div><div class="tl-d">AIM OS architecture designed</div></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="plabel">Recent Memories</div>
+    <div class="mem"><div class="memtx">Docker compose wires all AIM services together</div><div class="memscore">IMP 0.92 · infra</div></div>
+    <div class="mem"><div class="memtx">RTX 2050 · 4 GB VRAM · CUDA 13.3</div><div class="memscore">IMP 0.88 · screen</div></div>
+    <div class="mem"><div class="memtx">Groq free — llama-3.3-70b · 500 req/day</div><div class="memscore">IMP 0.80 · research</div></div>
+  </div>
+</aside>
+
+<!-- ══ CHAT ══ -->
+<div class="chat">
+  <div class="msgs" id="msgs">
+    <div class="msg aim">
+      <div class="av">AIM</div>
+      <div>
+        <div class="bub">All systems online. Memory engine active, Redis event bus running, LLM Router ready on Groq. Loaded AIM-OS project — 6 of 8 services built. Arc Reactor interface initialised. What do you want to build next?</div>
+        <div class="mt">03:13:44</div>
+      </div>
+    </div>
+  </div>
+  <div class="ibar">
+    <span class="ipfx">▶</span>
+    <input class="inp" id="inp" type="text" placeholder="Speak to AIM..." autocomplete="off"/>
+    <button class="sbtn" onclick="openMemModal()" style="border-color:var(--txd);color:var(--txd);">MEMORY</button>
+    <button class="sbtn" id="sbtn">TRANSMIT</button>
+  </div>
+</div>
+<!-- ══ MEMORY MODAL ══ -->
+<div id="memModal" style="display:none;position:fixed;inset:0;background:rgba(2,11,20,.92);z-index:999;align-items:center;justify-content:center;">
+  <div style="width:700px;max-height:80vh;background:var(--bg2);border:1px solid var(--bords);display:flex;flex-direction:column;position:relative;">
+    <!-- corners -->
+    <div class="cb tl"></div><div class="cb tr"></div>
+    <div class="cb bl"></div><div class="cb br"></div>
+    <!-- header -->
+    <div style="padding:10px 16px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:12px;background:var(--bg3);">
+      <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:4px;color:var(--c);">MEMORY BANK</div>
+      <div style="font-size:9px;letter-spacing:2px;color:var(--txd);">QDRANT + POSTGRESQL</div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+        <div id="memCount" style="font-size:9px;color:var(--txd);letter-spacing:1px;">0 RECORDS</div>
+        <button onclick="closeMemModal()" style="background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:9px;padding:3px 10px;cursor:pointer;letter-spacing:1px;">CLOSE</button>
+      </div>
+    </div>
+    <!-- search -->
+    <div style="padding:10px 16px;border-bottom:1px solid var(--bord);display:flex;gap:8px;">
+      <span style="color:var(--c);font-size:13px;align-self:center;">▶</span>
+      <input id="memSearch" type="text" placeholder="Search memories semantically..."
+        style="flex:1;background:transparent;border:none;outline:none;color:var(--tx);font-family:'Share Tech Mono',monospace;font-size:12px;caret-color:var(--c);"
+        oninput="filterMemories(this.value)"/>
+      <select id="memTierFilter" onchange="filterMemories(document.getElementById('memSearch').value)"
+        style="background:var(--bg3);border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:9px;padding:3px 8px;outline:none;">
+        <option value="">ALL TIERS</option>
+        <option value="working">WORKING</option>
+        <option value="short">SHORT</option>
+        <option value="long">LONG</option>
+        <option value="archive">ARCHIVE</option>
+      </select>
+      <button onclick="searchMemoriesSemantic()" style="background:var(--cg);border:1px solid var(--c);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:9px;padding:3px 12px;cursor:pointer;letter-spacing:1px;">SEARCH</button>
+    </div>
+    <!-- tier tabs -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--bord);">
+      <div class="mtab act" id="tt-all" onclick="setTierTab('all')" style="border:none;border-right:1px solid var(--bord);border-bottom:2px solid var(--c);padding:5px 14px;">ALL</div>
+      <div class="mtab" id="tt-short" onclick="setTierTab('short')" style="border:none;border-right:1px solid var(--bord);padding:5px 14px;">SHORT</div>
+      <div class="mtab" id="tt-long" onclick="setTierTab('long')" style="border:none;border-right:1px solid var(--bord);padding:5px 14px;">LONG</div>
+      <div class="mtab" id="tt-archive" onclick="setTierTab('archive')" style="border:none;padding:5px 14px;">ARCHIVE</div>
+    </div>
+    <!-- memory list -->
+    <div id="memList" style="flex:1;overflow-y:auto;padding:10px 16px;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;scrollbar-color:var(--bord) transparent;">
+      <div style="color:var(--txm);font-size:11px;text-align:center;padding:20px;">Loading memories...</div>
+    </div>
+    <!-- bottom bar -->
+    <div style="padding:8px 16px;border-top:1px solid var(--bord);background:var(--bg3);display:flex;gap:8px;align-items:center;">
+      <button onclick="runMemoryDecay()" style="background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:8px;padding:4px 10px;cursor:pointer;letter-spacing:1px;">RUN DECAY</button>
+      <button onclick="exportMemories()" style="background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:8px;padding:4px 10px;cursor:pointer;letter-spacing:1px;">EXPORT JSON</button>
+      <div style="margin-left:auto;font-size:8px;color:var(--txm);letter-spacing:1px;" id="memStatus">READY</div>
+    </div>
+  </div>
+</div>
+<!-- ══ UNKNOWN APP MODAL ══ -->
+<div id="unknownAppModal" style="display:none;position:fixed;bottom:80px;right:12px;width:340px;z-index:997;background:var(--bg2);border:1px solid var(--bords);pointer-events:all;">
+  <div class="cb tl"></div><div class="cb tr"></div>
+  <div class="cb bl"></div><div class="cb br"></div>
+  <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--c),transparent);opacity:.8;"></div>
+  <div style="padding:10px 14px;border-bottom:1px solid var(--bord);background:var(--bg3);display:flex;align-items:center;gap:8px;">
+    <span style="font-size:8px;padding:1px 8px;border:1px solid var(--amber);color:var(--amber);letter-spacing:1px;">UNKNOWN APP</span>
+    <span style="font-size:9px;color:var(--txd);" id="unknownAppTitle">Unknown</span>
+    <button onclick="dismissUnknownApp()" style="margin-left:auto;background:transparent;border:none;color:var(--txm);cursor:pointer;font-size:11px;">✕</button>
+  </div>
+  <div style="padding:12px 14px;">
+    <div style="font-size:11px;color:var(--txd);margin-bottom:10px;line-height:1.5;">
+      AIM detected a new app. Help me learn it:
+    </div>
+    <div style="display:flex;flex-direction:column;gap:7px;">
+      <input id="learnAppName" type="text" placeholder="App name (e.g. Figma)"
+        style="background:var(--bg3);border:1px solid var(--bord);color:var(--tx);font-family:'Share Tech Mono',monospace;font-size:11px;padding:6px 10px;outline:none;width:100%;"
+        onfocus="this.style.borderColor='var(--c)'" onblur="this.style.borderColor='var(--bord)'"/>
+      <input id="learnAppPurpose" type="text" placeholder="Why you use it (e.g. UI design)"
+        style="background:var(--bg3);border:1px solid var(--bord);color:var(--tx);font-family:'Share Tech Mono',monospace;font-size:11px;padding:6px 10px;outline:none;width:100%;"
+        onfocus="this.style.borderColor='var(--c)'" onblur="this.style.borderColor='var(--bord)'"/>
+      <select id="learnAppCategory"
+        style="background:var(--bg3);border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:10px;padding:6px 10px;outline:none;width:100%;">
+        <option value="work">WORK</option>
+        <option value="dev">DEVELOPMENT</option>
+        <option value="design">DESIGN</option>
+        <option value="research">RESEARCH</option>
+        <option value="communication">COMMUNICATION</option>
+        <option value="entertainment">ENTERTAINMENT</option>
+        <option value="productivity">PRODUCTIVITY</option>
+        <option value="system">SYSTEM</option>
+      </select>
+      <div style="display:flex;gap:6px;margin-top:2px;">
+        <button onclick="submitLearnApp()"
+          style="flex:1;background:var(--cg);border:1px solid var(--c);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:9px;padding:7px;cursor:pointer;letter-spacing:2px;">
+          TEACH AIM
+        </button>
+        <button onclick="dismissUnknownApp()"
+          style="background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:9px;padding:7px 12px;cursor:pointer;letter-spacing:1px;">
+          SKIP
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ══ NOTIFICATIONS PANEL ══ -->
+<div id="notifPanel" style="position:fixed;top:60px;right:12px;width:320px;z-index:998;display:flex;flex-direction:column;gap:6px;pointer-events:none;">
+</div>
+
+<!-- ══ NOTIFICATION HISTORY MODAL ══ -->
+<div id="notifModal" style="display:none;position:fixed;inset:0;background:rgba(2,11,20,.92);z-index:999;align-items:center;justify-content:center;">
+  <div style="width:500px;max-height:75vh;background:var(--bg2);border:1px solid var(--bords);display:flex;flex-direction:column;position:relative;">
+    <div class="cb tl"></div><div class="cb tr"></div>
+    <div class="cb bl"></div><div class="cb br"></div>
+    <div style="padding:10px 16px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:12px;background:var(--bg3);">
+      <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:4px;color:var(--c);">ALERTS</div>
+      <div style="font-size:9px;letter-spacing:2px;color:var(--txd);">NOTIFICATION HISTORY</div>
+      <button onclick="document.getElementById('notifModal').style.display='none'"
+        style="margin-left:auto;background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:9px;padding:3px 10px;cursor:pointer;">CLOSE</button>
+    </div>
+    <div id="notifHistoryList" style="flex:1;overflow-y:auto;padding:10px 16px;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;scrollbar-color:var(--bord) transparent;">
+      <div style="color:var(--txm);font-size:11px;text-align:center;padding:20px;">No notifications yet</div>
+    </div>
+    <div style="padding:8px 16px;border-top:1px solid var(--bord);background:var(--bg3);display:flex;gap:8px;">
+      <button onclick="clearNotifHistory()" style="background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:8px;padding:4px 10px;cursor:pointer;letter-spacing:1px;">CLEAR ALL</button>
+      <div style="margin-left:auto;font-size:8px;color:var(--txm);letter-spacing:1px;" id="notifCount">0 ALERTS</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// Clock
+function tick(){document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8)}
+setInterval(tick,1000);tick();
+
+// Uptime
+let uptimeSec=0;
+setInterval(()=>{
+  uptimeSec++;
+  const h=String(Math.floor(uptimeSec/3600)).padStart(2,'0');
+  const m=String(Math.floor((uptimeSec%3600)/60)).padStart(2,'0');
+  const s=String(uptimeSec%60).padStart(2,'0');
+  document.getElementById('uptimePill').textContent=`UPTIME ${h}:${m}:${s}`;
+},1000);
+
+// Tick marks
+const tcon=document.getElementById('ticks');
+for(let i=0;i<72;i++){
+  const d=document.createElement('div');
+  d.className='tick'+(i%6===0?' major':'');
+  d.style.transform=`rotate(${i*5}deg)`;
+  tcon.appendChild(d);
+}
+
+// Sparkline
+function drawSpark(){
+  const c=document.getElementById('spark');
+  const ctx=c.getContext('2d');
+  const data=[2,5,3,8,12,7,14,18,10,15,20,16,24,19,22,28];
+  const w=c.width,h=c.height,pad=4;
+  const mx=Math.max(...data),mn=Math.min(...data);
+  const px=i=>pad+i*(w-pad*2)/(data.length-1);
+  const py=v=>h-pad-(v-mn)/(mx-mn)*(h-pad*2);
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle='rgba(0,212,255,0.07)';ctx.lineWidth=1;
+  for(let g=0;g<4;g++){const y=pad+g*(h-pad*2)/3;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+  ctx.beginPath();ctx.moveTo(px(0),py(data[0]));
+  data.forEach((v,i)=>ctx.lineTo(px(i),py(v)));
+  ctx.lineTo(px(data.length-1),h);ctx.lineTo(px(0),h);ctx.closePath();
+  const grad=ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'rgba(0,212,255,0.15)');grad.addColorStop(1,'rgba(0,212,255,0.01)');
+  ctx.fillStyle=grad;ctx.fill();
+  ctx.beginPath();ctx.moveTo(px(0),py(data[0]));
+  data.forEach((v,i)=>ctx.lineTo(px(i),py(v)));
+  ctx.strokeStyle='rgba(0,212,255,0.85)';ctx.lineWidth=1.5;ctx.stroke();
+  data.forEach((v,i)=>{ctx.beginPath();ctx.arc(px(i),py(v),1.8,0,Math.PI*2);ctx.fillStyle='#00d4ff';ctx.fill()});
+}
+drawSpark();
+
+// Arc state
+const core=document.getElementById('core');
+const swaves=document.getElementById('swaves');
+const arcst=document.getElementById('arcst');
+function setState(s){
+  core.className='arc-model-slot '+s;
+  swaves.className='swaves'+(s==='speaking'?' on':'');
+  arcst.textContent={idle:'STANDING BY',thinking:'PROCESSING',speaking:'RESPONDING'}[s]||'STANDING BY';
+  arcst.className='arc-status '+(s==='idle'?'':s);
+}
+
+// Chat
+const msgs=document.getElementById('msgs');
+const inp=document.getElementById('inp');
+const sbtn=document.getElementById('sbtn');
+const ts=()=>new Date().toTimeString().slice(0,8);
+
+function addMsg(role,text,typing){
+  const w=document.createElement('div');w.className='msg '+role;
+  const av=document.createElement('div');av.className='av';av.textContent=role==='aim'?'AIM':'YOU';
+  const inner=document.createElement('div');
+  const b=document.createElement('div');b.className='bub'+(typing?' cursor':'');b.textContent=text;
+  const t=document.createElement('div');t.className='mt';t.textContent=ts();
+  inner.appendChild(b);inner.appendChild(t);
+  if(role==='aim'){w.appendChild(av);w.appendChild(inner)}
+  else{w.appendChild(inner);w.appendChild(av)}
+  msgs.appendChild(w);msgs.scrollTop=msgs.scrollHeight;
+  return b;
+}
+
+const replies=[
+  "Understood. Cross-referencing memory bank for relevant context before processing.",
+  "Found 3 matching memories from previous sessions. Integrating into my reasoning now.",
+  "Analysing AIM-OS project context — Docker stack, RTX 2050 config, Groq routing layer. Stand by.",
+  "Research Agent invoking Gemini 2.0 Flash with Google Search grounding. Results indexed to long-term memory.",
+  "Memory Engine query complete. Semantic vector search returned 2 high-confidence matches in Qdrant.",
+  "Timeline event logged. Session focus score: 87% — exceptional concentration, Johnn.",
+  "All Docker services healthy. Redis event bus active. Qdrant online. PostgreSQL ready.",
+  "LLM Router directing task to llama-3.3-70b on Groq. Estimated tokens: ~800. Within free tier budget.",
+  "VRAM utilisation stable at 2.4 GB free. CUDA 13.3 context hot. No thermal throttling detected.",
+];
+let ri=0;
+async function send(){
+  const txt=inp.value.trim();if(!txt)return;
+  inp.value='';
+  addMsg('usr',txt,false);
+  setState('thinking');
+
+  // Call real brain
+  const rep = await sendToBrain(txt);
+
+  setState('speaking');
+  const b=addMsg('aim','',true);
+  let i=0;
+  const iv=setInterval(()=>{
+    b.textContent=rep.slice(0,i);i+=2;msgs.scrollTop=msgs.scrollHeight;
+    if(i>rep.length){
+      clearInterval(iv);
+      b.textContent=rep;
+      b.classList.remove('cursor');
+      setState('idle');
+      // Log to timeline
+      fetch('http://localhost:8002/events',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          event_type:'aim.chat',
+          description:`User: ${txt.slice(0,60)}`,
+          app:'jarvis-ui',
+          focus_score:0.8
+        })
+      }).catch(()=>{});
+    }
+  },14);
+}
+sbtn.addEventListener('click',send);
+inp.addEventListener('keydown',e=>{if(e.key==='Enter')send()});
+
+// Boot
+setTimeout(()=>{setState('thinking');setTimeout(()=>{setState('speaking');setTimeout(()=>setState('idle'),2000)},1200)},500);
+
+// Counters
+function animCount(el,target,suffix,dur=1100){
+  const start=Date.now();
+  const iv=setInterval(()=>{
+    const p=Math.min((Date.now()-start)/dur,1);
+    el.textContent=Math.round(parseFloat(target)*p)+suffix;
+    if(p>=1){el.textContent=target+suffix;clearInterval(iv)}
+  },30);
+}
+setTimeout(()=>{
+  animCount(document.getElementById('sv1'),6,'');
+  animCount(document.getElementById('sv2'),12,'');
+  animCount(document.getElementById('sv4'),'1.4','h',1400);
+},700);
+
+// VRAM fluctuation
+setInterval(()=>{
+  document.getElementById('vram-val').textContent=(2.2+Math.random()*.4).toFixed(1)+' GB';
+},4000);
+
+// ── LIVE BACKEND CONNECTION ──────────────────────
+const API = {
+  timeline: 'http://localhost:8002',
+  memory:   'http://localhost:8003',
+  brain:    'http://localhost:8004',
+  router:   'http://localhost:8001',
+};
+
+async function fetchLiveData() {
+  try {
+
+    // ── Timeline ──────────────────────────────
+    const tlRes = await fetch(`${API.timeline}/events/today`);
+    if (tlRes.ok) {
+      const tlData = await tlRes.json();
+      if (tlData.length > 0) {
+        const tlContainer = document.querySelector('.right .tl-item')?.parentElement;
+        if (tlContainer) {
+          tlContainer.innerHTML = '<div class="plabel">Today\'s Timeline</div>';
+          tlData.slice(0, 6).forEach(ev => {
+            const time = new Date(ev.started_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});
+            const div = document.createElement('div');
+            div.className = 'tl-item';
+            div.innerHTML = `
+              <div class="tl-dot"></div>
+              <div>
+                <div class="tl-t">${time}</div>
+                <div class="tl-d">${(ev.description||ev.event_type).slice(0,60)}</div>
+              </div>`;
+            tlContainer.appendChild(div);
+          });
+        }
+      }
+    }
+
+    // ── Stats ─────────────────────────────────
+    const statsRes = await fetch(`${API.timeline}/stats`);
+    if (statsRes.ok) {
+      const stats = await statsRes.json();
+      document.getElementById('sv1').textContent = stats.total_events || 0;
+      if (stats.avg_focus_score !== null && stats.avg_focus_score !== undefined) {
+        document.getElementById('sv3').textContent =
+          Math.round(stats.avg_focus_score * 100) + '%';
+      }
+      // Update sparkline with by_type data
+      if (stats.by_type && stats.by_type.length > 0) {
+        updateSparkline(stats.by_type.map(t => t.count));
+      }
+    }
+
+    // ── Memory count + recent ─────────────────
+    const memRes = await fetch(`${API.memory}/memories?limit=20`);
+    if (memRes.ok) {
+      const memData = await memRes.json();
+      document.getElementById('sv2').textContent = memData.length || 0;
+
+      if (memData.length > 0) {
+        const memContainer = document.querySelector('.mem')?.parentElement;
+        if (memContainer) {
+          memContainer.innerHTML = '<div class="plabel">Recent Memories</div>';
+          memData.slice(0, 3).forEach(m => {
+            const div = document.createElement('div');
+            div.className = 'mem';
+            div.innerHTML = `
+              <div class="memtx">${m.content.slice(0,80)}</div>
+              <div class="memscore">IMP ${parseFloat(m.importance).toFixed(2)} · ${m.source}</div>`;
+            memContainer.appendChild(div);
+          });
+        }
+      }
+    }
+
+    // ── Session time ──────────────────────────
+    document.getElementById('sv4').textContent =
+      (uptimeSec / 3600).toFixed(1) + 'h';
+
+    // ── Service health indicators ─────────────
+    const checks = [
+      {url:`${API.router}/health`, dot:'dot-brain',   label:'BRAIN'},
+      {url:`${API.memory}/health`, dot:'dot-memory',  label:'MEMORY'},
+      {url:`${API.timeline}/health`,dot:'dot-redis',  label:'REDIS'},
+    ];
+    for (const c of checks) {
+      try {
+        const r = await fetch(c.url, {signal: AbortSignal.timeout(3000)});
+        const dot = document.getElementById(c.dot);
+        if (dot) dot.className = r.ok ? 'dot gn' : 'dot red';
+      } catch {
+        const dot = document.getElementById(c.dot);
+        if (dot) dot.className = 'dot red';
+      }
+    }
+
+    // ── VRAM fluctuation ──────────────────────
+    document.getElementById('vram-val').textContent =
+      (2.0 + Math.random() * 0.6).toFixed(1) + ' GB';
+    
+    // ── HOST BRIDGE POLLING ───────────────────────
+const BRIDGE = 'http://localhost:9999';
+
+
+// ── UNKNOWN APP LEARNING ──────────────────────
+let currentUnknownApp = null;
+
+function showUnknownAppPrompt(windowInfo) {
+  if (currentUnknownApp) return; // already showing one
+  currentUnknownApp = windowInfo;
+  document.getElementById('unknownAppTitle').textContent =
+    (windowInfo.raw_title || windowInfo.title || 'Unknown').slice(0, 40);
+  document.getElementById('learnAppName').value = windowInfo.app || '';
+  document.getElementById('learnAppPurpose').value = '';
+  document.getElementById('unknownAppModal').style.display = 'block';
+}
+
+function dismissUnknownApp() {
+  document.getElementById('unknownAppModal').style.display = 'none';
+  currentUnknownApp = null;
+}
+
+async function submitLearnApp() {
+  const name     = document.getElementById('learnAppName').value.trim();
+  const purpose  = document.getElementById('learnAppPurpose').value.trim();
+  const category = document.getElementById('learnAppCategory').value;
+
+  if (!name) {
+    document.getElementById('learnAppName').style.borderColor = 'var(--red)';
+    return;
+  }
+
+  const titleKey = currentUnknownApp?.title_key || '';
+
+  // Show loading state
+  const btn = document.querySelector('#unknownAppModal button[onclick="submitLearnApp()"]');
+  if (btn) { btn.textContent = 'TEACHING...'; btn.disabled = true; }
+
+  try {
+    // Teach host bridge using no-cors mode to avoid preflight
+    await fetch(`${BRIDGE}/learn-app`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({title_key: titleKey, name, purpose, category})
+    });
+  } catch(e) {
+    console.warn('Bridge learn error (may still have worked):', e.message);
+  }
+
+  try {
+    // Store in AIM memory
+    await fetch(`${API.memory}/memories`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        content:    `App learned: ${name} — ${purpose} (category: ${category})`,
+        source:     'app-learning',
+        importance: 0.85,
+        confidence: 1.0,
+        tags:       ['app', 'learned', category],
+        tier:       'long'
+      })
+    });
+  } catch(e) {
+    console.warn('Memory store error:', e.message);
+  }
+
+  try {
+    // Log to timeline
+    await fetch(`${API.timeline}/events`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        event_type:  'app.learned',
+        description: `Learned: ${name} — ${purpose}`,
+        app:          name.toLowerCase(),
+        focus_score:  0.7
+      })
+    });
+  } catch(e) {
+    console.warn('Timeline error:', e.message);
+  }
+
+  // Always show success and close
+  showNotification({
+    title:      'AIM Learned',
+    message:    `Got it — ${name} is for ${purpose || category}. I will remember this.`,
+    priority:   'normal',
+    confidence: 1.0,
+    source:     'app-learning'
+  });
+
+  dismissUnknownApp();
+}
+// Check for unknown apps in bridge poll
+const _origPollBridge = pollHostBridge;
+async function pollHostBridge() {
+  try {
+    const winRes = await fetch(`${BRIDGE}/active-window`,
+      {signal: AbortSignal.timeout(2000)});
+    if (winRes.ok) {
+      const win = await winRes.json();
+      document.getElementById('activeapp-val').textContent =
+        (win.app || 'unknown').toUpperCase().slice(0, 12);
+
+      // Unknown app detected — ask user
+      // Unknown app — AIM is auto-researching it
+      if (!win.known && win.should_ask) {
+        showNotification({
+          title:      'AIM Researching',
+          message:    `Identifying unknown app: ${win.raw_title?.slice(0,40) || win.app}...`,
+          priority:   'low',
+          confidence: 0.5,
+          source:     'auto-research'
+        });
+      }
+
+      // Show purpose if learned
+      if (win.learned && win.purpose) {
+        document.getElementById('llm-val').textContent =
+          win.purpose.slice(0, 14).toUpperCase();
+      }
+    }
+
+    const sysRes = await fetch(`${BRIDGE}/system-stats`,
+      {signal: AbortSignal.timeout(2000)});
+    if (sysRes.ok) {
+      const sys = await sysRes.json();
+      document.getElementById('sysstat-val').textContent =
+        `${sys.cpu_percent?.toFixed(0)||'--'}% / ${sys.ram_percent?.toFixed(0)||'--'}%`;
+    }
+  } catch(e) {
+    document.getElementById('activeapp-val').textContent = 'BRIDGE OFF';
+  }
+}
+// Poll every 5 seconds
+setInterval(pollHostBridge, 5000);
+pollHostBridge();
+  } catch(e) {
+    console.warn('fetchLiveData error:', e.message);
+  }
+}
+
+function updateSparkline(data) {
+  const c = document.getElementById('spark');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height, pad = 4;
+  const mx = Math.max(...data, 1);
+  const mn = Math.min(...data, 0);
+  const px = i => pad + i * (w - pad*2) / (data.length - 1);
+  const py = v => h - pad - (v - mn) / (mx - mn) * (h - pad*2);
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle = 'rgba(0,212,255,0.07)';
+  ctx.lineWidth = 1;
+  for (let g = 0; g < 4; g++) {
+    const y = pad + g*(h-pad*2)/3;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+  }
+  if (data.length < 2) return;
+  ctx.beginPath(); ctx.moveTo(px(0), py(data[0]));
+  data.forEach((v,i) => ctx.lineTo(px(i), py(v)));
+  ctx.lineTo(px(data.length-1), h);
+  ctx.lineTo(px(0), h); ctx.closePath();
+  const grad = ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'rgba(0,212,255,0.15)');
+  grad.addColorStop(1,'rgba(0,212,255,0.01)');
+  ctx.fillStyle = grad; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(px(0), py(data[0]));
+  data.forEach((v,i) => ctx.lineTo(px(i), py(v)));
+  ctx.strokeStyle = 'rgba(0,212,255,0.85)';
+  ctx.lineWidth = 1.5; ctx.stroke();
+  data.forEach((v,i) => {
+    ctx.beginPath(); ctx.arc(px(i),py(v),1.8,0,Math.PI*2);
+    ctx.fillStyle = '#00d4ff'; ctx.fill();
+  });
+}
+// Fetch on load then every 30 seconds
+fetchLiveData();
+setInterval(fetchLiveData, 30000);
+
+// ── SEND TO BRAIN ────────────────────────────────
+async function sendToBrain(userText) {
+  try {
+    const res = await fetch(`${API.router}/route`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        task: 'intent',
+        prompt: userText,
+        context: 'You are AIM, a JARVIS-style AI OS assistant. Be concise and technical.'
+      })
+    });
+    const data = await res.json();
+    return data.result;
+  } catch(e) {
+    return 'Backend connection error — check Docker services are running.';
+  }
+}
+// ── MEMORY MODAL ─────────────────────────────
+let allMemories = [];
+let currentTier = 'all';
+
+function openMemModal() {
+  document.getElementById('memModal').style.display = 'flex';
+  loadMemories();
+}
+
+function closeMemModal() {
+  document.getElementById('memModal').style.display = 'none';
+}
+
+async function loadMemories() {
+  try {
+    document.getElementById('memStatus').textContent = 'LOADING...';
+    const res = await fetch(`${API.memory}/memories?limit=100`);
+    allMemories = await res.json();
+    document.getElementById('memCount').textContent = allMemories.length + ' RECORDS';
+    document.getElementById('memStatus').textContent = 'LOADED ' + allMemories.length + ' MEMORIES';
+    renderMemories(allMemories);
+  } catch(e) {
+    document.getElementById('memStatus').textContent = 'ERROR: ' + e.message;
+  }
+}
+
+function renderMemories(mems) {
+  const list = document.getElementById('memList');
+  if (mems.length === 0) {
+    list.innerHTML = '<div style="color:var(--txm);font-size:11px;text-align:center;padding:20px;">No memories found</div>';
+    return;
+  }
+  list.innerHTML = mems.map(m => `
+    <div style="padding:10px 12px;border:1px solid var(--bord);background:var(--bg3);position:relative;transition:.2s;"
+      onmouseover="this.style.borderColor='rgba(0,212,255,.4)'"
+      onmouseout="this.style.borderColor='var(--bord)'">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+        <span style="font-size:8px;padding:1px 8px;border:1px solid;letter-spacing:1px;
+          color:${tierColor(m.tier)};border-color:${tierColor(m.tier)};">
+          ${(m.tier||'short').toUpperCase()}
+        </span>
+        <span style="font-size:8px;color:var(--txm);letter-spacing:1px;">${m.source||'unknown'}</span>
+        <span style="margin-left:auto;font-size:8px;color:var(--c);font-family:'Orbitron',monospace;">
+          IMP ${parseFloat(m.importance||0).toFixed(2)}
+        </span>
+      </div>
+      <div style="font-size:12px;color:var(--tx);line-height:1.6;margin-bottom:5px;">
+        ${m.content}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:8px;color:var(--txm);">
+          ${m.created_at ? new Date(m.created_at).toLocaleString('en-IN') : ''}
+        </span>
+        ${(m.tags||[]).map(t =>
+          `<span style="font-size:8px;padding:1px 6px;background:var(--cd);border:1px solid var(--bord);color:var(--txd);">${t}</span>`
+        ).join('')}
+        <button onclick="deleteMemory('${m.id}')"
+          style="margin-left:auto;background:transparent;border:1px solid rgba(255,51,85,.3);
+          color:rgba(255,51,85,.6);font-family:'Share Tech Mono',monospace;
+          font-size:8px;padding:2px 8px;cursor:pointer;letter-spacing:1px;">DEL</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function tierColor(tier) {
+  const colors = {
+    working: '#00ff88',
+    short:   '#00d4ff',
+    long:    '#ffaa00',
+    archive: '#4a7a9b'
+  };
+  return colors[tier] || '#00d4ff';
+}
+
+function setTierTab(tier) {
+  currentTier = tier;
+  document.querySelectorAll('[id^="tt-"]').forEach(t => {
+    t.classList.remove('act');
+    t.style.borderBottom = 'none';
+  });
+  const active = document.getElementById('tt-' + tier);
+  if (active) {
+    active.classList.add('act');
+    active.style.borderBottom = '2px solid var(--c)';
+  }
+  const filtered = tier === 'all'
+    ? allMemories
+    : allMemories.filter(m => m.tier === tier);
+  renderMemories(filtered);
+}
+
+function filterMemories(query) {
+  const tier = document.getElementById('memTierFilter').value;
+  let filtered = allMemories;
+  if (tier) filtered = filtered.filter(m => m.tier === tier);
+  if (query.trim()) {
+    const q = query.toLowerCase();
+    filtered = filtered.filter(m =>
+      m.content.toLowerCase().includes(q) ||
+      (m.source||'').toLowerCase().includes(q) ||
+      (m.tags||[]).some(t => t.toLowerCase().includes(q))
+    );
+  }
+  renderMemories(filtered);
+}
+
+async function searchMemoriesSemantic() {
+  const query = document.getElementById('memSearch').value.trim();
+  if (!query) return;
+  document.getElementById('memStatus').textContent = 'SEARCHING...';
+  try {
+    const res = await fetch(`${API.memory}/memories/search`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({query, limit: 10})
+    });
+    const data = await res.json();
+    const results = data.results || [];
+    document.getElementById('memStatus').textContent =
+      `FOUND ${results.length} SEMANTIC MATCHES`;
+    // Map to memory format
+    const mapped = results.map(r => ({
+      id: r.id,
+      content: r.content,
+      source: r.source,
+      tier: r.tier || 'short',
+      importance: r.importance || r.score,
+      tags: r.tags || [],
+      created_at: null
+    }));
+    renderMemories(mapped);
+  } catch(e) {
+    document.getElementById('memStatus').textContent = 'SEARCH ERROR';
+  }
+}
+
+async function deleteMemory(id) {
+  if (!confirm('Delete this memory?')) return;
+  try {
+    await fetch(`${API.memory}/memories/${id}`, {method:'DELETE'});
+    allMemories = allMemories.filter(m => m.id !== id);
+    document.getElementById('memCount').textContent = allMemories.length + ' RECORDS';
+    renderMemories(currentTier === 'all'
+      ? allMemories
+      : allMemories.filter(m => m.tier === currentTier));
+    document.getElementById('memStatus').textContent = 'MEMORY DELETED';
+  } catch(e) {
+    document.getElementById('memStatus').textContent = 'DELETE ERROR';
+  }
+}
+
+async function runMemoryDecay() {
+  document.getElementById('memStatus').textContent = 'RUNNING DECAY...';
+  try {
+    const res = await fetch(`${API.memory}/memories/decay`, {method:'POST'});
+    const data = await res.json();
+    document.getElementById('memStatus').textContent =
+      `DECAY: ${data.archived} ARCHIVED · ${data.deleted} DELETED`;
+    await loadMemories();
+  } catch(e) {
+    document.getElementById('memStatus').textContent = 'DECAY ERROR';
+  }
+}
+
+function exportMemories() {
+  const blob = new Blob(
+    [JSON.stringify(allMemories, null, 2)],
+    {type: 'application/json'}
+  );
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `aim-memories-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  document.getElementById('memStatus').textContent = 'EXPORTED ' + allMemories.length + ' MEMORIES';
+}
+
+// Close modal on backdrop click
+document.getElementById('memModal').addEventListener('click', function(e) {
+  if (e.target === this) closeMemModal();
+});
+// ── NOTIFICATIONS ─────────────────────────────
+let notifHistory = [];
+let notifPolling = null;
+
+function showNotification(data) {
+  const panel = document.getElementById('notifPanel');
+  // Max 3 visible at once
+  while (panel.children.length >= 3) {
+    panel.removeChild(panel.firstChild);
+  }
+  const colors = {
+    high:   {border:'var(--red)',   glow:'rgba(255,51,85,.3)',   label:'ALERT'},
+    normal: {border:'var(--c)',     glow:'rgba(0,212,255,.2)',   label:'INFO'},
+    low:    {border:'var(--txd)',   glow:'rgba(74,122,155,.1)',  label:'NOTE'},
+  };
+  const col = colors[data.priority || 'normal'];
+
+  const el = document.createElement('div');
+  el.style.cssText = `
+    background:var(--bg2);
+    border:1px solid ${col.border};
+    padding:10px 14px;
+    pointer-events:all;
+    box-shadow:0 0 20px ${col.glow};
+    animation:notifIn .3s ease;
+    position:relative;
+    overflow:hidden;
+  `;
+  el.innerHTML = `
+    <style>
+      @keyframes notifIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+      @keyframes notifOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(20px)}}
+    </style>
+    <div style="position:absolute;top:0;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,transparent,${col.border},transparent);opacity:.8;"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+      <span style="font-size:8px;padding:1px 7px;border:1px solid ${col.border};
+        color:${col.border};letter-spacing:1px;">${col.label}</span>
+      <span style="font-size:9px;font-family:'Orbitron',monospace;color:var(--tx);">
+        ${data.title || 'AIM'}
+      </span>
+      <button onclick="this.closest('div[style]').remove()"
+        style="margin-left:auto;background:transparent;border:none;
+        color:var(--txm);cursor:pointer;font-size:11px;line-height:1;">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--txd);line-height:1.5;">
+      ${data.message}
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:5px;">
+      <span style="font-size:8px;color:var(--txm);">
+        ${new Date().toTimeString().slice(0,8)}
+      </span>
+      <span style="font-size:8px;color:var(--txm);">
+        CONF ${((data.confidence||0.8)*100).toFixed(0)}%
+      </span>
+    </div>
+  `;
+
+  panel.appendChild(el);
+
+  // Update badge
+  const badge = document.getElementById('notifBadge');
+  badge.style.display = 'block';
+
+  // Auto remove after 8 seconds
+  setTimeout(() => {
+    el.style.animation = 'notifOut .3s ease forwards';
+    setTimeout(() => el.remove(), 300);
+  }, 8000);
+
+  // Add to history
+  notifHistory.unshift({
+    ...data,
+    timestamp: new Date().toISOString()
+  });
+  updateNotifBadge();
+}
+
+function updateNotifBadge() {
+  const badge = document.getElementById('notifBadge');
+  badge.style.display = notifHistory.length > 0 ? 'block' : 'none';
+  document.getElementById('notifCount').textContent =
+    notifHistory.length + ' ALERTS';
+}
+
+function openNotifModal() {
+  document.getElementById('notifModal').style.display = 'flex';
+  document.getElementById('notifBadge').style.display = 'none';
+  renderNotifHistory();
+}
+
+function renderNotifHistory() {
+  const list = document.getElementById('notifHistoryList');
+  if (notifHistory.length === 0) {
+    list.innerHTML = '<div style="color:var(--txm);font-size:11px;text-align:center;padding:20px;">No notifications yet</div>';
+    return;
+  }
+  const colors = {high:'var(--red)',normal:'var(--c)',low:'var(--txd)'};
+  list.innerHTML = notifHistory.map(n => `
+    <div style="padding:9px 12px;border:1px solid var(--bord);background:var(--bg3);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="width:6px;height:6px;border-radius:50%;
+          background:${colors[n.priority||'normal']};
+          box-shadow:0 0 5px ${colors[n.priority||'normal']};
+          flex-shrink:0;display:inline-block;"></span>
+        <span style="font-size:10px;color:var(--tx);">${n.title||'AIM'}</span>
+        <span style="margin-left:auto;font-size:8px;color:var(--txm);">
+          ${new Date(n.timestamp).toTimeString().slice(0,8)}
+        </span>
+      </div>
+      <div style="font-size:11px;color:var(--txd);line-height:1.5;">${n.message}</div>
+      <div style="font-size:8px;color:var(--txm);margin-top:3px;">
+        ${n.source||'aim'} · CONF ${((n.confidence||0.8)*100).toFixed(0)}%
+      </div>
+    </div>
+  `).join('');
+}
+
+async function clearNotifHistory() {
+  try {
+    await fetch(`${API.notification}/history`, {method:'DELETE'});
+  } catch(e) {}
+  notifHistory = [];
+  updateNotifBadge();
+  renderNotifHistory();
+}
+
+// Poll notification service every 5 seconds
+let notifStartTime = new Date().toISOString();
+
+async function pollNotifications() {
+  try {
+    const res = await fetch(`http://localhost:8006/history`,
+      {signal: AbortSignal.timeout(3000)});
+    if (!res.ok) return;
+    const items = await res.json();
+    const known = new Set(notifHistory.map(n => n.timestamp));
+    items.forEach(item => {
+      // Only show notifications from AFTER this session started
+      if (!known.has(item.timestamp) && item.timestamp > notifStartTime) {
+        showNotification(item);
+      }
+    });
+  } catch(e) {
+    console.warn('Notification poll error:', e.message);
+  }
+}
+
+// Add notification service to API object
+API.notification = 'http://localhost:8006';
+
+// Start polling
+// Start polling — only if service is reachable
+fetch('http://localhost:8006/health')
+  .then(() => setInterval(pollNotifications, 5000))
+  .catch(() => console.log('Notification service not reachable — skipping poll'));
+// Test notification on load
+// Boot notification
+// Boot notification
+setTimeout(async () => {
+  // Clear panel and Redis history on boot
+  document.getElementById('notifPanel').innerHTML = '';
+  notifHistory = [];
+  try {
+    await fetch('http://localhost:8006/history', {method:'DELETE'});
+  } catch(e) {}
+  showNotification({
+    title: 'AIM OS',
+    message: 'All systems online. Memory engine active. Timeline logging. Ready for commands.',
+    priority: 'normal',
+    confidence: 0.99,
+    source: 'system'
+  });
+}, 2000);
+</script>
+
+<script src="baymax.js"></script>
+</body>
+</html>

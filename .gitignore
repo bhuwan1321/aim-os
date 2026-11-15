@@ -1,0 +1,21 @@
+# secrets: never commit any env file except the example
+.env
+.env.*
+!.env.example
+
+# runtime state and big local data
+data/
+runtime/
+workspace/
+logs/
+*.log
+
+# caches and build output
+__pycache__/
+*.pyc
+node_modules/
+.pytest_cache/
+
+# local safety copies
+*.backup*
+*.bak

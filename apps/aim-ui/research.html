@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIM OS - Research Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+:root{--bg:#020810;--panel:#04101c;--panel2:#061826;--c:#00d4ff;--cd:rgba(0,212,255,.12);--bord:rgba(0,212,255,.22);
+--tx:#bfeaf7;--txd:#6fa3b8;--txm:#3d6577;--ok:#00ff88;--slow:#ffb020;--fail:#ff3355;--unk:#5d7f90;--plan:#4a6a7a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--tx);font-family:'Share Tech Mono',monospace;font-size:12px;overflow:hidden}
+button,input,select,textarea{font-family:inherit;font-size:12px;color:var(--tx)}
+.app{display:grid;grid-template-rows:44px 1fr 250px;grid-template-columns:250px 1fr 330px;height:100vh}
+header{grid-column:1/4;display:flex;align-items:center;gap:16px;padding:0 14px;border-bottom:1px solid var(--bord);background:var(--panel)}
+header h1{font-family:Orbitron,sans-serif;font-size:14px;letter-spacing:3px;color:var(--c);font-weight:700}
+header a{color:var(--txd);text-decoration:none;border:1px solid var(--bord);padding:4px 10px}
+header a:hover{color:var(--c);border-color:var(--c)}
+header .sp{flex:1}
+.live{display:flex;align-items:center;gap:6px;color:var(--txd)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--unk)}
+.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.rl{color:var(--slow);display:none}
+.rl.show{display:inline}
+.btn{background:var(--cd);border:1px solid var(--bord);padding:6px 10px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;font-size:11px}
+.btn:hover{border-color:var(--c);color:var(--c)}
+.btn.pri{border-color:var(--c);color:var(--c)}
+.btn:disabled{opacity:.4;cursor:default}
+aside{grid-column:1;grid-row:2/4;border-right:1px solid var(--bord);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.sec{padding:10px 12px;border-bottom:1px solid var(--bord)}
+.lbl{font-family:Orbitron,sans-serif;font-size:9px;letter-spacing:2px;color:var(--txm);margin-bottom:7px}
+.plist{overflow:auto;flex:1;min-height:80px}
+.proj{padding:8px 12px;border-bottom:1px solid rgba(0,212,255,.08);cursor:pointer;display:flex;gap:8px;align-items:center}
+.proj:hover{background:var(--cd)}
+.proj.sel{background:var(--cd);border-left:2px solid var(--c)}
+.proj .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj .sub{color:var(--txm);font-size:10px}
+.chip{border:1px solid var(--bord);padding:1px 6px;color:var(--c);font-size:10px}
+.legend div{display:flex;align-items:center;gap:8px;margin:4px 0;color:var(--txd)}
+.legend i{display:inline-block;width:22px;height:0;border-top:3px solid}
+input[type=text],textarea,select{width:100%;background:#020c16;border:1px solid var(--bord);padding:6px 8px;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--c)}
+textarea{resize:vertical;min-height:60px}
+main{grid-column:2;grid-row:2;position:relative;min-width:0;min-height:0;background:radial-gradient(ellipse at 50% 40%,#04162a 0%,var(--bg) 70%)}
+.toolbar{position:absolute;top:8px;left:10px;right:10px;display:flex;gap:8px;align-items:center;z-index:5;pointer-events:none}
+.toolbar>*{pointer-events:auto}
+.toolbar .title{font-family:Orbitron,sans-serif;font-size:13px;color:var(--c);letter-spacing:2px;margin-right:auto;pointer-events:none}
+.seg{display:flex}
+.seg .btn{border-radius:0}
+.seg .btn.on{background:var(--c);color:#001018;border-color:var(--c)}
+svg#g{width:100%;height:100%;display:block;cursor:grab}
+svg#g:active{cursor:grabbing}
+.node rect{fill:#041526;stroke-width:1.6}
+.node.planned rect{stroke-dasharray:5 4}
+.node text{pointer-events:none}
+.node .nm{font-size:11px;fill:var(--tx)}
+.node .sb{font-size:9px;fill:var(--txm)}
+.node:hover rect,.node.sel rect{fill:#08243c}
+.node.dim,.link.dim{opacity:.18}
+.link path.l{fill:none;stroke-width:1.6}
+.link path.hit{fill:none;stroke:transparent;stroke-width:12;cursor:pointer}
+.link.sel path.l{stroke-width:3.4}
+.link text{font-size:9.5px;fill:var(--tx);paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round;pointer-events:none}
+.link.flash path.l{stroke-width:3.2}
+.col text{font-family:Orbitron,sans-serif;font-size:10px;letter-spacing:3px;fill:var(--txm)}
+.col rect{fill:rgba(0,212,255,.02);stroke:rgba(0,212,255,.07)}
+.empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--txm);line-height:2;pointer-events:none}
+.empty b{font-family:Orbitron,sans-serif;color:var(--c);letter-spacing:3px;font-size:14px}
+#insp{grid-column:3;grid-row:2;border-left:1px solid var(--bord);background:var(--panel);overflow:auto;padding:12px;min-height:0}
+#insp h2{font-family:Orbitron,sans-serif;font-size:12px;color:var(--c);letter-spacing:2px;margin-bottom:4px;word-break:break-all}
+#insp .kv{display:grid;grid-template-columns:78px 1fr;gap:3px 8px;margin:8px 0;color:var(--txd)}
+#insp .kv b{color:var(--txm);font-weight:400}
+#insp .kv span{color:var(--tx);word-break:break-all}
+.badge{display:inline-block;padding:1px 8px;border:1px solid;font-size:10px;letter-spacing:1px;text-transform:uppercase}
+.b-ok{color:var(--ok)}.b-slow{color:var(--slow)}.b-fail{color:var(--fail)}.b-unknown{color:var(--unk)}.b-planned{color:var(--plan)}
+.box{border:1px solid var(--bord);background:var(--panel2);padding:8px;margin:8px 0;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.box.fail{border-color:var(--fail)}
+.quiet{color:var(--slow);opacity:.85}
+.lnk{cursor:pointer;color:var(--c);text-decoration:underline dotted}
+.dock{grid-column:2/4;border-top:1px solid var(--bord);background:var(--panel);display:grid;grid-template-columns:230px 1fr 340px;min-height:0}
+.dock>div{padding:10px 12px;overflow:auto;min-height:0;border-right:1px solid var(--bord)}
+.dock>div:last-child{border-right:none}
+.big{font-family:Orbitron,sans-serif;font-size:34px;color:var(--c)}
+.bar{height:7px;background:#06203a;border:1px solid var(--bord);margin:6px 0}
+.bar i{display:block;height:100%;background:var(--c)}
+.mods{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px}
+.mod .top{display:flex;justify-content:space-between;gap:6px}
+.mod .nm{cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mod .nm:hover{color:var(--c)}
+.pills{display:flex;gap:4px;margin-top:3px}
+.pill{border:1px solid var(--bord);padding:0 5px;font-size:9px;cursor:pointer;color:var(--txm)}
+.pill.done{color:var(--ok);border-color:var(--ok)}
+.pill.man::after{content:"*"}
+.blk{margin:4px 0;padding-left:10px;border-left:2px solid var(--fail);color:var(--txd);cursor:default}
+.blk.t{border-color:var(--slow)}
+.blk.lnk2{cursor:pointer}
+.task{display:flex;gap:6px;align-items:center;margin:3px 0;color:var(--txd);cursor:pointer}
+.modal{position:fixed;inset:0;background:rgba(0,4,10,.8);display:none;align-items:center;justify-content:center;z-index:20}
+.modal.show{display:flex}
+.card{width:520px;max-width:94vw;max-height:88vh;overflow:auto;background:var(--panel);border:1px solid var(--c);padding:18px}
+.card h3{font-family:Orbitron,sans-serif;color:var(--c);letter-spacing:3px;font-size:13px;margin-bottom:12px}
+.row{margin:10px 0}
+.fold{display:flex;justify-content:space-between;padding:7px 9px;border:1px solid var(--bord);margin:5px 0;cursor:pointer}
+.fold:hover{border-color:var(--c);background:var(--cd)}
+.err{color:var(--fail);margin-top:8px}
+#mNew .card.wide{width:980px}
+.cmp{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}
+.opt{border:1px solid var(--bord);background:var(--panel2);padding:10px;cursor:pointer;position:relative}
+.opt:hover{border-color:var(--c)}
+.opt.sel{border-color:var(--c);box-shadow:0 0 0 1px var(--c) inset;background:#08243c}
+.opt h4{font-family:Orbitron,sans-serif;font-size:11px;color:var(--c);letter-spacing:1px;margin-bottom:6px;padding-right:70px}
+.opt .rec{position:absolute;top:8px;right:8px;font-size:9px;color:var(--ok);border:1px solid var(--ok);padding:0 5px}
+.opt .how{color:var(--txd);margin-bottom:6px;line-height:1.5}
+.opt .pro{color:var(--ok)}.opt .con{color:var(--fail)}
+.opt ul{list-style:none;margin:4px 0}
+.opt li{margin:2px 0;color:var(--tx)}
+.opt .meta{color:var(--txm);margin-top:6px;font-size:11px}
+.stk{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}
+.stk span{border:1px solid var(--bord);padding:0 5px;font-size:10px;color:var(--c)}
+.chat{max-height:250px;overflow:auto;border:1px solid var(--bord);padding:8px;background:var(--panel2);margin:6px 0}
+.msg{margin:6px 0;padding:6px 9px;max-width:88%;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.msg.assistant{border-left:2px solid var(--c);color:var(--tx)}
+.msg.user{margin-left:auto;background:#08243c;border:1px solid var(--bord)}
+#coach{margin-top:6px;color:var(--ok);font-size:11px;line-height:1.45}
+.plan li{margin:5px 0;list-style:none;padding-left:10px;border-left:2px solid var(--c)}
+.plan small{color:var(--txm)}
+.charts{display:grid;grid-template-columns:320px 1fr;gap:14px;align-items:center;margin:8px 0}
+.tot{display:grid;gap:8px}
+.trow{display:grid;grid-template-columns:150px 1fr 46px;gap:8px;align-items:center}
+.tbar{height:9px;background:#06203a;border:1px solid var(--bord)}
+.tbar i{display:block;height:100%}
+.srow{display:grid;grid-template-columns:110px 1fr 38px;gap:6px;align-items:center;margin-top:7px}
+.sbar{height:8px;background:#06203a;border:1px solid var(--bord)}
+.sbar i{display:block;height:100%}
+.gap{color:var(--txm);font-size:10.5px;margin:1px 0 0 0;line-height:1.4}
+.dl div{margin:4px 0;color:var(--txd);line-height:1.45}
+.dl b{color:var(--c)}
+.ax text{fill:var(--txd);font-size:9px}
+.tc{width:min(1240px,96vw);height:92vh;display:flex;flex-direction:column;padding:0}
+.tc .hd{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--bord)}
+.tc .hd h3{margin:0;flex:1}
+.tc .bn{display:flex;gap:18px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--bord);flex-wrap:wrap}
+.verdict{font-family:Orbitron,sans-serif;font-size:22px;letter-spacing:2px}
+.v-PASS{color:var(--ok)}.v-WARN{color:var(--slow)}.v-FAIL{color:var(--fail)}.v-RUN{color:var(--c)}
+.cnt{display:flex;gap:8px}.cnt span{border:1px solid;padding:2px 9px}
+.cnt .p{color:var(--ok)}.cnt .w{color:var(--slow)}.cnt .f{color:var(--fail)}.cnt .s{color:var(--unk)}
+.cov{color:var(--txd);line-height:1.6}
+.tcb{display:grid;grid-template-columns:330px 1fr;flex:1;min-height:0}
+.tcl{border-right:1px solid var(--bord);overflow:auto}
+.tl{padding:9px 14px;border-bottom:1px solid rgba(0,212,255,.08);cursor:pointer}
+.tl:hover{background:var(--cd)}.tl.sel{background:var(--cd);border-left:2px solid var(--c)}
+.tl .t1{display:flex;justify-content:space-between;gap:8px}
+.tl .ds{color:var(--txm);font-size:10px;margin:3px 0 5px;line-height:1.4}
+.stack{display:flex;height:6px;background:#06203a}
+.stack i{display:block;height:100%}
+.tcr{display:flex;flex-direction:column;min-height:0}
+.flt{display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--bord);flex-wrap:wrap;align-items:center}
+.flt .btn{padding:3px 9px;font-size:10px}.flt .btn.on{background:var(--c);color:#001018;border-color:var(--c)}
+.trs{overflow:auto;flex:1;padding:4px 0}
+.tr2{display:grid;grid-template-columns:54px 1fr 70px;gap:8px;padding:5px 14px;cursor:pointer;align-items:baseline}
+.tr2:hover{background:var(--cd)}
+.tr2 .ic{font-family:Orbitron,sans-serif;font-size:9px;letter-spacing:1px}
+.st-pass .ic{color:var(--ok)}.st-fail .ic{color:var(--fail)}.st-warn .ic{color:var(--slow)}.st-skip .ic{color:var(--unk)}
+.tr2 .mm{color:var(--txm);text-align:right}
+.td2{padding:0 14px 6px 76px;color:var(--txd);font-size:11px;line-height:1.5;word-break:break-word}
+.st-fail+.td2{color:#ff8da0}.st-warn+.td2{color:#ffd48a}
+.tft{border-top:1px solid var(--bord);padding:8px 16px;display:flex;gap:24px;color:var(--txd);flex-wrap:wrap}
+.tft b{color:var(--c);font-weight:400}
+.hrun{display:inline-block;width:10px;height:18px;margin-right:2px;vertical-align:middle}
+@media(max-width:1150px){.app{grid-template-columns:190px 1fr 250px}.dock{grid-template-columns:150px 1fr 230px}.toolbar .title{display:none}}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:var(--bord)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>RESEARCH CENTER</h1>
+    <a href="index.html">&larr; JARVIS</a>
+    <span class="sp"></span>
+    <span class="rl" id="rl">RATE LIMITED - AI paused <span id="rlt"></span></span>
+    <span class="live"><span class="dot" id="sse"></span><span id="ssetx">connecting</span></span>
+  </header>
+
+  <aside>
+    <div class="sec" style="display:flex;gap:8px">
+      <button class="btn pri" style="flex:1" id="bOpen">Open project</button>
+      <button class="btn pri" style="flex:1" id="bNew">New project</button>
+    </div>
+    <div class="lbl" style="padding:10px 12px 0">PROJECTS</div>
+    <div class="plist" id="plist"></div>
+    <div class="sec legend">
+      <div class="lbl">LINK HEALTH (live signals)</div>
+      <div><i style="border-color:var(--ok)"></i>working</div>
+      <div><i style="border-color:var(--slow)"></i>slow / degraded / no listener</div>
+      <div><i style="border-color:var(--fail)"></i>failing / never receiving</div>
+      <div><i style="border-color:var(--unk)"></i>no probe available</div>
+      <div><i style="border-color:var(--plan);border-top-style:dashed"></i>planned, not built</div>
+      <div style="margin-top:8px;color:var(--txm)">Dots on a link = real traffic that just happened.</div>
+    </div>
+    <div class="sec">
+      <div class="lbl">WEB RESEARCH</div>
+      <input type="text" id="rq" placeholder="Research a topic, press Enter">
+      <div id="rres" style="margin-top:6px;color:var(--txd);max-height:120px;overflow:auto"></div>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <div class="toolbar">
+      <div class="title" id="ptitle">NO PROJECT</div>
+      <div class="seg"><button class="btn on" id="vSvc">Services</button><button class="btn" id="vFile">Files</button></div>
+      <button class="btn" id="bLbl">Labels: auto</button>
+      <button class="btn" id="bFit">Fit</button>
+      <button class="btn" id="bRescan">Rescan</button>
+      <button class="btn pri" id="bTest">Test</button>
+    </div>
+    <svg id="g"><g id="vp"><g id="cols"></g><g id="links"></g><g id="pk"></g><g id="nodes"></g></g></svg>
+    <div class="empty" id="empty"><div><b>OPEN OR CREATE A PROJECT</b><br>Open a folder to map how it really works,<br>or describe an idea to get a planned map and checklist.</div></div>
+  </main>
+
+  <div id="insp"><div style="color:var(--txm);line-height:1.8">Click a node to see what it is,<br>or a link to see what flows over it and whether it is healthy.<br><br>Red link: shows which side is failing, the last error and the last success.</div></div>
+
+  <div class="dock">
+    <div>
+      <div class="lbl">COMPLETION</div>
+      <div class="big" id="pct">--</div>
+      <div class="bar"><i id="pbar" style="width:0"></i></div>
+      <svg id="spark" width="200" height="46"></svg>
+      <div style="color:var(--txm);font-size:10px" id="sparkn">progress over time</div>
+      <div id="coach"></div><div id="lastTest" style="color:var(--txd);font-size:10.5px;margin-top:4px"></div>
+      <div style="display:flex;gap:6px;margin-top:8px"><button class="btn" style="flex:1" id="bMiss">What's missing?</button><button class="btn pri" style="flex:1;display:none" id="bUnd">Understand</button></div>
+    </div>
+    <div>
+      <div class="lbl">MODULES - built / tested / connected (click a pill to set manually, alt-click to clear)</div>
+      <div class="mods" id="mods"></div>
+    </div>
+    <div>
+      <div class="lbl">BLOCKING 100%</div>
+      <div id="blk"></div>
+      <div class="lbl" style="margin-top:10px" id="tlbl"></div>
+      <div id="tasks"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="mTest"><div class="card tc">
+  <div class="hd"><h3 id="tcTitle">TEST CYCLE</h3>
+    <label style="color:var(--txd);display:flex;gap:6px;align-items:center"><input type="checkbox" id="tcAi" checked style="width:auto"> include external calls (AI, web, git)</label>
+    <button class="btn pri" id="tcRun">Run all tests</button><button class="btn" id="tcUi">Run UI tests</button><button class="btn" id="tcClose">Close</button></div>
+  <div id="tcBody" style="display:flex;flex-direction:column;flex:1;min-height:0"></div>
+</div></div>
+
+<div class="modal" id="mOpen"><div class="card">
+  <h3>OPEN PROJECT</h3>
+  <div style="color:var(--txd);margin-bottom:8px">Folders the Research Center can read (AIM OS itself and your workspace folder). Put other projects in <b>workspace/</b>, or set <b>AIM_PROJECTS</b> in .env to another folder.</div>
+  <div id="folders"></div>
+  <div class="lbl" style="margin-top:12px">OR PASTE A GIT REPO LINK (public repos)</div>
+  <div class="row" style="display:flex;gap:8px"><input type="text" id="gurl" placeholder="https://github.com/owner/repo"><button class="btn pri" id="doClone" style="white-space:nowrap">Clone &amp; understand</button></div>
+  <div class="quiet" id="gstat"></div>
+  <div style="color:var(--txd)">It is cloned into workspace/, scanned and explained, and you get a plan to finish it. Nothing in the repo is ever run, and nothing is built until you say so.</div>
+  <div class="lbl" style="margin-top:12px">OR A FOLDER</div>
+  <div class="row"><input type="text" id="fpath" placeholder="/projects/workspace/my-project"></div>
+  <div class="row" style="display:flex;gap:8px"><button class="btn pri" id="doOpen">Scan &amp; open</button><button class="btn" data-close>Cancel</button></div>
+  <div class="err" id="oerr"></div>
+</div></div>
+
+<div class="modal" id="mNew"><div class="card" id="nCard">
+  <h3>NEW PROJECT</h3>
+  <div class="row"><div class="lbl">NAME</div><input type="text" id="nname" placeholder="Pet Shop"></div>
+  <div class="row"><div class="lbl">TYPE</div><select id="ntype">
+    <option value="webapp">Web app (frontend + API + DB)</option><option value="website">Website</option>
+    <option value="microservices">Docker microservices</option><option value="app">Mobile / desktop app</option>
+    <option value="game">Game</option><option value="cli">CLI / library</option><option value="pipeline">Data pipeline</option></select></div>
+  <div class="row"><div class="lbl">SHORT IDEA</div><textarea id="nidea" placeholder="Online shop with user login, payments and image uploads"></textarea></div>
+  <div style="color:var(--txd)">Creates a planned map (all nodes marked not built) and a checklist. Words like login, payments, chat, AI, upload add the matching modules.</div>
+  <div class="row" style="display:flex;gap:8px"><button class="btn pri" id="doThink">Think with me</button><button class="btn pri" id="doCmp">Compare options</button><button class="btn" id="doNew">Skip - just plan it</button><button class="btn" data-close>Cancel</button></div>
+  <div style="color:var(--txd)">Nothing is built or generated until you have seen what we are building and how, and picked an approach.</div>
+  <div class="err" id="nerr"></div>
+  <div id="nstep2"></div>
+</div></div>
+
+<script>
+const R = 'http://localhost:8005';
+const LAYERS = ['ui','api','core','data','infra','external'];
+const COL = {ok:'#00ff88',slow:'#ffb020',fail:'#ff3355',unknown:'#5d7f90',planned:'#4a6a7a'};
+const RANK = {fail:5,slow:4,unknown:2,planned:1,ok:0};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let P = null, LIVE = null, view = 'services', lblMode = 'auto', VN = [], VL = [], sel = null, hist = [];
+const NW = 190, GAP = 84;
+
+async function api(path, opt) {
+  const r = await fetch(R + path, opt);
+  if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch (e) {} throw new Error(m); }
+  return r.json();
+}
+const post = (p, b) => api(p, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(b || {})});
+const ago = ts => { if (!ts) return 'never'; const s = Math.max(0, Date.now()/1000 - ts); return s < 90 ? Math.round(s) + 's ago' : s < 5400 ? Math.round(s/60) + 'm ago' : Math.round(s/3600) + 'h ago'; };
+const stOf = id => (LIVE && LIVE.nodes[id]) || {state: P && P.kind === 'planned' ? 'planned' : 'unknown'};
+
+/* ---------- projects ---------- */
+async function loadProjects(selectId) {
+  let list = [];
+  try { list = await api('/projects'); } catch (e) { $('#plist').innerHTML = '<div class="proj"><span class="quiet">Research agent not reachable</span></div>'; return; }
+  $('#plist').innerHTML = list.map(p => `<div class="proj ${P && P.id === p.id ? 'sel' : ''}" data-id="${p.id}">
+    <div class="nm">${esc(p.name)}<div class="sub">${p.kind === 'planned' ? 'planned' : esc(p.type || 'scanned')} - ${p.nodes} nodes</div></div>
+    <span class="del chip" data-del="${p.id}" title="Delete project">x</span></div>`).join('') || '<div class="proj"><span style="color:var(--txm)">No projects yet</span></div>';
+  document.querySelectorAll('.proj[data-id]').forEach(el => el.onclick = e => {
+    if (e.target.dataset.del) return;
+    selectProject(el.dataset.id);
+  });
+  document.querySelectorAll('[data-del]').forEach(el => el.onclick = async () => {
+    if (!confirm('Delete this project from the Research Center? (your files are not touched)')) return;
+    await api('/projects/' + el.dataset.del, {method: 'DELETE'});
+    if (P && P.id === el.dataset.del) { P = null; render(); }
+    loadProjects();
+  });
+  const want = selectId || (P && P.id) || localStorage.getItem('aim.research.project');
+  if (!P && want && list.some(p => p.id === want)) selectProject(want);
+}
+
+async function selectProject(id) {
+  try { P = await api('/projects/' + id); } catch (e) { P = null; loadProjects(); return; }
+  P.graph = P.graph || {}; P.graph.nodes = P.graph.nodes || []; P.graph.edges = P.graph.edges || []; P.graph.tasks = P.graph.tasks || []; P.overrides = P.overrides || {};
+  try { localStorage.setItem('aim.research.project', id); } catch (e) {}
+  LIVE = null; sel = null;
+  document.querySelectorAll('.proj').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
+  $('#ptitle').textContent = P.name.toUpperCase() + (P.kind === 'planned' ? '  (PLANNED)' : '');
+  $('#bRescan').style.display = P.kind === 'scanned' ? '' : 'none';
+  inspEmpty();
+  render();
+  await refreshLive();
+  loadHistory();
+}
+
+/* ---------- view model ---------- */
+function buildView() {
+  const nodes = P.graph.nodes, byId = new Map(nodes.map(n => [n.id, n]));
+  const hidden = n => view === 'services' ? (n.kind === 'file' && n.parent && byId.has(n.parent)) : (n.kind === 'service' && (n.files || []).length);
+  VN = nodes.filter(n => !hidden(n)).map(n => ({...n}));
+  const vis = new Map(VN.map(n => [n.id, n]));
+  const gid = id => { const n = byId.get(id); return view === 'services' && n && n.parent && vis.has(n.parent) ? n.parent : id; };
+  const m = new Map();
+  for (const e of P.graph.edges) {
+    const a = gid(e.from), b = gid(e.to);
+    if (a === b || !vis.has(a) || !vis.has(b)) continue;
+    const k = a + '>' + b + '|' + e.kind;
+    if (!m.has(k)) m.set(k, {id: k, from: a, to: b, kind: e.kind, members: [], labels: []});
+    const l = m.get(k); l.members.push(e); if (!l.labels.includes(e.label)) l.labels.push(e.label);
+  }
+  VL = [...m.values()];
+  // drop service nodes with no visible links in files view clutter? keep everything: every node is real
+  layout();
+}
+
+function layout() {
+  const cols = LAYERS.filter(l => VN.some(n => n.layer === l));
+  const byCol = cols.map(l => VN.filter(n => n.layer === l).sort((a, b) => a.name.localeCompare(b.name)));
+  const adj = new Map(VN.map(n => [n.id, []]));
+  VL.forEach(l => { adj.get(l.from).push(l.to); adj.get(l.to).push(l.from); });
+  const idx = new Map(), colOf = new Map();
+  byCol.forEach((c, ci) => c.forEach((n, i) => { idx.set(n.id, i / Math.max(1, c.length)); colOf.set(n.id, ci); }));
+  for (let it = 0; it < 8; it++) {
+    const order = it % 2 ? [...byCol.keys()].reverse() : [...byCol.keys()];
+    for (const ci of order) {
+      const c = byCol[ci];
+      const bc = new Map(c.map(n => { const nb = adj.get(n.id).filter(id => colOf.get(id) !== ci).map(id => idx.get(id)); return [n.id, nb.length ? nb.reduce((a, b) => a + b, 0) / nb.length : idx.get(n.id)]; }));
+      c.sort((a, b) => bc.get(a.id) - bc.get(b.id) || a.name.localeCompare(b.name));
+      c.forEach((n, i) => idx.set(n.id, i / Math.max(1, c.length)));
+    }
+  }
+  const rowH = view === 'files' ? 46 : 60, nh = view === 'files' ? 32 : 40, gap = GAP;
+  const maxRows = Math.max(1, ...byCol.map(c => c.length));
+  byCol.forEach((c, ci) => c.forEach((n, i) => {
+    n.x = 30 + ci * (NW + gap); n.y = 60 + (maxRows - c.length) * rowH / 2 + i * rowH; n.w = NW; n.h = nh; n.col = ci;
+  }));
+  VN.cols = cols; VN.rowH = rowH; VN.maxRows = maxRows;
+}
+
+const linkState = l => l.members.map(m => (LIVE && LIVE.edges[m.id]) || {state: P.kind === 'planned' ? 'planned' : 'unknown'})
+  .reduce((w, s) => (RANK[s.state] > RANK[w.state] ? s : w), {state: 'ok'});
+
+function linkPath(l) {
+  const a = VN.find(n => n.id === l.from), b = VN.find(n => n.id === l.to);
+  if (!a || !b) return '';
+  const ay = a.y + a.h / 2, by = b.y + b.h / 2;
+  if (b.col > a.col) { const x1 = a.x + a.w, x2 = b.x, dx = Math.max(40, (x2 - x1) / 2); return `M${x1},${ay} C${x1 + dx},${ay} ${x2 - dx},${by} ${x2},${by}`; }
+  if (b.col < a.col) { const x1 = a.x, x2 = b.x + b.w, dx = Math.max(40, (x1 - x2) / 2); return `M${x1},${ay} C${x1 - dx},${ay} ${x2 + dx},${by} ${x2},${by}`; }
+  const x1 = a.x + a.w, x2 = b.x + b.w, bulge = 46 + Math.abs(ay - by) * .08;
+  return `M${x1},${ay} C${x1 + bulge},${ay} ${x2 + bulge},${by} ${x2},${by}`;
+}
+
+/* ---------- drawing ---------- */
+const svg = d3.select('#g'), vp = d3.select('#vp');
+const zoom = d3.zoom().scaleExtent([.2, 3]).on('zoom', e => vp.attr('transform', e.transform));
+svg.call(zoom).on('dblclick.zoom', null);
+
+function render() {
+  $('#empty').style.display = P ? 'none' : 'flex';
+  vp.select('#cols').selectAll('*').remove(); vp.select('#links').selectAll('*').remove();
+  vp.select('#nodes').selectAll('*').remove(); vp.select('#pk').selectAll('*').remove();
+  if (!P) { VN = []; VL = []; dock(); return; }
+  buildView();
+  const H = 60 + VN.maxRows * VN.rowH + 30;
+  VN.cols.forEach((l, i) => {
+    const g = vp.select('#cols').append('g').attr('class', 'col');
+    g.append('rect').attr('x', 18 + i * (NW + GAP)).attr('y', 14).attr('width', NW + 24).attr('height', H);
+    g.append('text').attr('x', 30 + i * (NW + GAP)).attr('y', 36).text(l.toUpperCase());
+  });
+  const lg = vp.select('#links').selectAll('g').data(VL, d => d.id).join('g').attr('class', 'link');
+  lg.append('path').attr('class', 'l').attr('id', (d, i) => 'lp' + i).attr('d', linkPath).attr('marker-end', null);
+  lg.append('path').attr('class', 'hit').attr('d', linkPath).on('click', (e, d) => { e.stopPropagation(); pick({type: 'link', id: d.id}); })
+    .on('mouseenter', (e, d) => hover(d)).on('mouseleave', () => hover(null));
+  lg.append('text').attr('text-anchor', 'middle');
+  const ng = vp.select('#nodes').selectAll('g').data(VN, d => d.id).join('g').attr('class', 'node').attr('transform', d => `translate(${d.x},${d.y})`)
+    .style('cursor', 'pointer').on('click', (e, d) => { e.stopPropagation(); pick({type: 'node', id: d.id}); })
+    .on('mouseenter', (e, d) => hover({node: d.id})).on('mouseleave', () => hover(null));
+  ng.append('rect').attr('width', d => d.w).attr('height', d => d.h).attr('rx', 3);
+  ng.append('text').attr('class', 'nm').attr('x', 10).attr('y', d => d.h / 2 - (view === 'files' ? -3 : 3)).text(d => cut(d.name, 26));
+  ng.append('text').attr('class', 'sb').attr('x', 10).attr('y', d => d.h - 8).text(d => view === 'files' ? '' : sub(d));
+  ng.append('title').text(d => d.path || d.name);
+  styleAll(); fit(); dock();
+}
+svg.on('click', () => { sel = null; inspEmpty(); styleAll(); });
+const cut = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+const sub = d => d.kind === 'service' && d.files ? `${d.files.length} files - ${d.lines} lines` : d.kind === 'file' ? `${d.lines} lines` : d.kind;
+
+function styleAll(hoverFocus) {
+  const focus = hoverFocus || (sel && (sel.type === 'node' ? {node: sel.id} : VL.find(l => l.id === sel.id)));
+  const near = new Set();
+  if (focus) { if (focus.node) { near.add(focus.node); VL.forEach(l => { if (l.from === focus.node || l.to === focus.node) { near.add(l.from); near.add(l.to); } }); } else { near.add(focus.from); near.add(focus.to); } }
+  const many = VL.length > 26;
+  vp.select('#nodes').selectAll('g.node').each(function (d) {
+    const s = stOf(d.id), el = d3.select(this);
+    el.select('rect').attr('stroke', COL[s.state] || COL.unknown);
+    el.classed('planned', s.state === 'planned').classed('sel', sel && sel.type === 'node' && sel.id === d.id)
+      .classed('dim', !!focus && !near.has(d.id));
+    const built = P.kind === 'planned' ? (P.overrides.items || {})[d.id + ':built'] : true;
+    el.select('rect').attr('fill', P.kind === 'planned' && !built ? '#03101c' : null);
+  });
+  vp.select('#links').selectAll('g.link').each(function (d) {
+    const s = linkState(d), el = d3.select(this), c = COL[s.state] || COL.unknown;
+    const on = focus ? (focus.node ? (d.from === focus.node || d.to === focus.node) : d.id === focus.id) : false;
+    d.state = s.state;
+    el.classed('dim', !!focus && !on).classed('sel', sel && sel.type === 'link' && sel.id === d.id);
+    el.select('path.l').attr('stroke', c).attr('stroke-dasharray', s.state === 'planned' ? '5 5' : null)
+      .attr('stroke-opacity', s.state === 'unknown' ? .6 : .9);
+    const show = lblMode === 'all' || (lblMode === 'auto' && (!many || on)) || (lblMode === 'focus' && on) || (sel && sel.type === 'link' && sel.id === d.id);
+    const t = el.select('text');
+    if (show && lblMode !== 'off') {
+      const path = el.select('path.l').node(), len = path.getTotalLength(), pt = path.getPointAtLength(len / 2);
+      const n = d.labels.length;
+      t.attr('x', pt.x).attr('y', pt.y - 3).text(cut(d.labels[0], 28) + (n > 1 ? ` +${n - 1}` : '')).style('display', null);
+    } else t.style('display', 'none');
+  });
+}
+function hover(h) { styleAll(h || undefined); }
+function fit() {
+  const el = $('#stage'), w = el.clientWidth, h = el.clientHeight;
+  if (!VN.length) return;
+  const W = 60 + VN.cols.length * (NW + GAP), H = 100 + VN.maxRows * VN.rowH;
+  const k = Math.max(.5, Math.min(1.2, (w - 20) / W, (h - 60) / H));
+  svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity.translate(Math.max(10, (w - W * k) / 2), 46).scale(k));
+}
+
+/* ---------- live ---------- */
+async function refreshLive() {
+  if (!P) return;
+  try { LIVE = await api(`/projects/${P.id}/live`); }
+  catch (e) {
+    if (/not found/i.test(e.message)) { P = null; sel = null; LIVE = null; $('#ptitle').textContent = 'NO PROJECT'; inspEmpty(); render(); loadProjects(); }
+    return;
+  }
+  styleAll(); dock(); if (sel) inspect();
+}
+setInterval(refreshLive, 4000);
+setInterval(() => { if (!document.hidden) loadProjects(); }, 8000);   // keeps the list in sync with changes made elsewhere
+
+/* ---------- real traffic -> packets (only when something actually happened) ---------- */
+const rates = new Map(); // link id -> recent timestamps
+function spawn(l, size) {
+  const idx = VL.indexOf(l); if (idx < 0) return;
+  const node = vp.select('#links').selectAll('g.link').filter(d => d === l).select('path.l').node(); if (!node) return;
+  const now = performance.now(), rs = (rates.get(l.id) || []).filter(t => now - t < 60000); rs.push(now); rates.set(l.id, rs);
+  const dur = Math.max(650, 2200 - rs.length * 90), r = 2.4 + Math.min(4, Math.log10((size || 0) + 10) * 1.1);
+  const s = linkState(l), c = COL[s.state] || '#00d4ff';
+  const dot = vp.select('#pk').append('circle').attr('r', r).attr('fill', c).attr('opacity', .95).style('filter', `drop-shadow(0 0 4px ${c})`);
+  const len = node.getTotalLength(), t0 = now;
+  const tick = t => { const f = Math.min(1, (t - t0) / dur); const p = node.getPointAtLength(len * f); dot.attr('cx', p.x).attr('cy', p.y);
+    if (f < 1) requestAnimationFrame(tick); else dot.remove(); };
+  requestAnimationFrame(tick);
+  d3.selectAll('#links g.link').filter(d => d === l).classed('flash', true); setTimeout(() => d3.selectAll('#links g.link').filter(d => d === l).classed('flash', false), 250);
+}
+const rx = p => new RegExp('^' + p.split('?')[0].replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{[^}]*\}/g, '[^/]+') + '$');
+function onEvent(ev) {
+  if (!P || P.kind === 'planned') return;
+  const nodeById = id => P.graph.nodes.find(n => n.id === id);
+  for (const l of VL) {
+    for (const m of l.members) {
+      let hit = false;
+      if (ev.t === 'bus') hit = m.kind === 'redis' && m.channel === ev.ch;
+      else if (ev.t === 'http' && m.kind === 'http' && m.toSvc === ev.dst && (!m.method || m.method === ev.method) && (!m.path || rx(m.path).test(ev.path.split('?')[0]))) {
+        const from = nodeById(m.from);
+        hit = ev.src === 'host' ? (from && from.layer === 'ui') : (!ev.src || !m.fromSvc || m.fromSvc === ev.src);
+      }
+      if (hit) { spawn(l, ev.size); break; }
+    }
+  }
+}
+(function connectSSE() {
+  const es = new EventSource(R + '/stream');
+  es.onopen = () => { $('#sse').classList.add('on'); $('#ssetx').textContent = 'live'; };
+  es.onerror = () => { $('#sse').classList.remove('on'); $('#ssetx').textContent = 'reconnecting'; };
+  es.onmessage = m => { try { onEvent(JSON.parse(m.data)); } catch (e) {} };
+})();
+
+/* ---------- inspector ---------- */
+function pick(s) { sel = s; styleAll(); inspect(); }
+function inspEmpty() {
+  const g = P && P.graph, c = g && g.comparison, ap = g && g.approach, u = g && g.understanding;
+  const why = g && g.motive ? `<div class="lbl">YOUR WHY</div><div class="box" style="border-color:var(--ok)">${esc(g.motive)}</div>` : '';
+  if (P && P.kind === 'scanned' && u) {
+    $('#insp').innerHTML = `<h2>UNDERSTANDING</h2>${g.source ? `<div style="color:var(--txm);word-break:break-all">${esc(g.source.git)}</div>` : ''}
+      <div class="lbl" style="margin-top:8px">WHAT IT IS</div><div class="box">${esc(u.what)}</div>
+      <div class="lbl">HOW IT WORKS</div><div class="box">${esc(u.how)}</div>
+      <div class="lbl">WHERE IT STANDS</div><div class="box">${esc(u.state)}</div>
+      ${(u.gaps || []).length ? `<div class="lbl">GAPS</div><div class="box">${u.gaps.map(x => '- ' + esc(x)).join(NL)}</div>` : ''}
+      <div class="lbl">PLAN TO COMPLETE IT (also in your task list)</div>
+      <ul class="plan">${u.plan.map((x, i) => `<li>${i + 1}. ${esc(x.task)}<br><small>${esc(x.why)} - ${esc(x.effort || '')}</small></li>`).join('')}</ul>
+      <div class="lbl" style="margin-top:10px">NOVELTY</div><div id="pnov">${g.novelty ? '' : '<button class="btn" id="bNov">Check novelty</button>'}</div>
+      <div style="margin-top:10px"><button class="btn pri" id="bBrief">Copy brief</button></div>
+      <div style="color:var(--txm);margin-top:6px">Nothing gets built until you approve a step.</div>`;
+    $('#bBrief').onclick = copyBrief;
+    if (g.novelty) renderNovelty($('#pnov'), g.novelty); else $('#bNov').onclick = noveltyNow;
+    return;
+  }
+  if (P && P.kind === 'planned' && (c || P.idea)) {
+    $('#insp').innerHTML = `<h2>THE PLAN</h2>${why}
+      ${c ? `<div class="lbl">WHAT WE ARE BUILDING</div><div class="box">${esc(c.building)}</div>` : `<div class="box">${esc(P.idea)}</div>`}
+      ${ap ? `<div class="lbl">APPROACH</div><div class="box"><b style="color:var(--c)">${esc(ap.name)}</b>${NL}${esc(ap.how)}${NL}${NL}effort: ${esc(ap.effort || '?')} - cost: ${esc(ap.cost || '?')}</div><div class="stk">${(ap.stack || []).map(t => `<span>${esc(t)}</span>`).join('')}</div>${c && c.recommendation ? `<div style="color:var(--txm);margin-top:4px">${c.recommendation.id === ap.id ? 'This was the recommended option.' : 'You chose a different option than recommended.'}</div>` : ''}` : ''}
+      ${c && (c.risks || []).length ? `<div class="lbl" style="margin-top:8px">RISKS</div><div class="box">${c.risks.map(x => '- ' + esc(x)).join(NL)}</div>` : ''}
+      ${g.novelty ? '<div class="lbl" style="margin-top:8px">NOVELTY</div><div id="pnov"></div>' : ''}
+      <div style="color:var(--txm);margin-top:8px">Click a node or link to inspect it. Open questions are in the task list below.</div>`;
+    if (g.novelty) renderNovelty($('#pnov'), g.novelty);
+    return;
+  }
+  $('#insp').innerHTML = '<div style="color:var(--txm);line-height:1.8">Click a node to see what it is,<br>or a link to see what flows over it and whether it is healthy.<br><br>Red link: shows which side is failing, the last error and the last success.</div>';
+}
+const nm = id => { const n = (P.graph.nodes.find(x => x.id === id)) || {}; return n.name || id; };
+function inspect() {
+  if (!sel || !P) return;
+  const box = $('#insp');
+  if (sel.type === 'node') {
+    const n = P.graph.nodes.find(x => x.id === sel.id); if (!n) return;
+    const s = stOf(n.id), out = VL.filter(l => l.from === n.id), inn = VL.filter(l => l.to === n.id);
+    const lk = (l, other) => `<div class="lnk" data-l="${esc(l.id)}">${esc(nm(other))} <span style="color:${COL[linkState(l).state]}">&bull;</span> ${esc(cut(l.labels[0], 30))}${l.labels.length > 1 ? ' +' + (l.labels.length - 1) : ''}</div>`;
+    box.innerHTML = `<h2>${esc(n.name)}</h2><span class="badge b-${s.state}">${s.state}</span>
+      <div class="kv"><b>kind</b><span>${esc(n.kind)} / ${esc(n.layer)}</span>
+      <b>path</b><span>${esc(n.path || 'not built yet')}</span>
+      ${n.size ? `<b>size</b><span>${(n.size / 1024).toFixed(1)} KB, ${n.lines} lines</span>` : ''}
+      ${n.mtime ? `<b>modified</b><span>${new Date(n.mtime * 1000).toLocaleString()}</span>` : ''}
+      <b>purpose</b><span>${esc(n.purpose || '-')}</span>
+      ${(n.routes || []).length ? `<b>routes</b><span>${esc(n.routes.slice(0, 12).join('\n'))}</span>` : ''}
+      ${(n.imports || []).length ? `<b>imports</b><span>${esc(n.imports.join('\n'))}</span>` : ''}
+      ${(n.exports || []).length ? `<b>exports</b><span>${esc(n.exports.join(', '))}</span>` : ''}
+      ${n.files ? `<b>files</b><span>${esc(n.files.join('\n'))}</span>` : ''}
+      <b>live</b><span>${esc(s.error || s.reason || (s.ms != null ? s.ms + ' ms' : '-'))}</span>
+      <b>last ok</b><span>${ago(s.last_ok)}</span>
+      ${s.last_err ? `<b>last error</b><span>${esc(s.last_err.msg)} (${ago(s.last_err.ts)})</span>` : ''}</div>
+      ${inn.length ? '<div class="lbl">RECEIVES FROM</div>' + inn.map(l => lk(l, l.from)).join('') : ''}
+      ${out.length ? '<div class="lbl" style="margin-top:8px">SENDS TO</div>' + out.map(l => lk(l, l.to)).join('') : ''}
+      <div style="margin-top:12px"><button class="btn pri" id="bExp">Explain this ${n.kind === 'file' ? 'file' : 'module'}</button></div><div id="ai"></div>`;
+    $('#bExp').onclick = () => explain(n.id, 'node');
+  } else {
+    const l = VL.find(x => x.id === sel.id); if (!l) return;
+    const ss = l.members.map(m => ({m, s: (LIVE && LIVE.edges[m.id]) || {state: 'unknown', reason: 'no data yet'}}));
+    const w = linkState(l);
+    const worst = ss.find(x => x.s.state === w.state) || ss[0];
+    const sideTxt = w.state === 'fail' ? { source: 'SOURCE - ' + nm(l.from), target: 'TARGET - ' + nm(l.to), bus: 'THE REDIS BUS', link: 'THE LINK' }[w.side] || 'THE LINK' : '';
+    box.innerHTML = `<h2>${esc(nm(l.from))} &rarr; ${esc(nm(l.to))}</h2><span class="badge b-${w.state}">${w.state}</span> <span style="color:var(--txm)">${esc(l.kind)}</span>
+      ${w.state === 'fail' ? `<div class="box fail">FAILING SIDE: ${esc(sideTxt)}\n${esc(w.reason || '')}\nlast error: ${esc(w.last_err ? w.last_err.msg + ' (' + ago(w.last_err.ts) + ')' : 'none recorded')}\nlast success: ${ago(w.last_ok)}</div>` : ''}
+      <div class="kv"><b>what flows</b><span>${esc(l.labels.join('\n'))}</span>
+      <b>why</b><span>${esc(worst.s.reason || '-')}</span>
+      <b>traffic</b><span>${ss.reduce((a, x) => a + (x.s.count || 0), 0)} in last 10 min, ${ss.reduce((a, x) => a + (x.s.per_min || 0), 0)}/min${worst.s.avg_ms != null ? ', avg ' + worst.s.avg_ms + ' ms' : ''}</span>
+      <b>last ok</b><span>${ago(Math.max(0, ...ss.map(x => x.s.last_ok || 0)))}</span></div>
+      ${l.members.length > 1 ? '<div class="lbl">MEMBERS</div>' + ss.map(x => `<div><span style="color:${COL[x.s.state]}">&bull;</span> ${esc(x.m.label)} ${x.s.state !== 'ok' ? '- ' + esc(x.s.reason || x.s.state) : ''}</div>`).join('') : ''}
+      <div style="margin-top:12px"><button class="btn pri" id="bExp">Explain this link</button></div><div id="ai"></div>`;
+    $('#bExp').onclick = () => explain(l.members[0].id, 'edge');
+  }
+  box.querySelectorAll('[data-l]').forEach(el => el.onclick = () => pick({type: 'link', id: el.dataset.l}));
+  renderAI();
+}
+
+/* ---------- AI (click only) ---------- */
+let rlTimer = null;
+function rateLimited(sec) {
+  $('#rl').classList.add('show'); let s = sec; $('#rlt').textContent = `(${s}s)`;
+  clearInterval(rlTimer); rlTimer = setInterval(() => { s--; $('#rlt').textContent = `(${s}s)`; if (s <= 0) { clearInterval(rlTimer); $('#rl').classList.remove('show'); } }, 1000);
+}
+const AIRES = {};   // results live here, so the 4 s refresh re-rendering the inspector can never wipe them
+function setAI(key, html) { AIRES[key] = html; renderAI(); }
+function renderAI() {
+  const el = $('#ai');
+  if (el && sel) { const h = AIRES['ai:' + sel.type + ':' + sel.id]; if (h) el.innerHTML = h; }
+  const e2 = $('#ai2'); if (e2 && AIRES.miss) e2.innerHTML = AIRES.miss;
+}
+async function aiCall(path, body, key) {
+  setAI(key, '<div class="box quiet">thinking...</div>');
+  try {
+    const r = await post(path, body);
+    if (r.rate_limited) { rateLimited(r.retry_after || 30); setAI(key, '<div class="box quiet">Rate limited - the free tier needs a short pause. Try again in a moment.</div>'); return; }
+    if (r.error) { setAI(key, `<div class="box quiet">${esc(r.error)}</div>`); return; }
+    setAI(key, `<div class="box">${esc(r.text)}</div><div style="color:var(--txm)">${r.cached ? 'cached - free repeat' : 'answered by ' + esc(r.model || 'model')}</div>`);
+  } catch (e) { setAI(key, `<div class="box quiet">${esc(e.message)}</div>`); }
+}
+const explain = (target, kind) => aiCall('/ai/explain', {project_id: P.id, target, kind}, 'ai:' + sel.type + ':' + sel.id);
+$('#bMiss').onclick = () => {
+  if (!P) return;
+  sel = null; styleAll(); delete AIRES.miss;
+  $('#insp').innerHTML = '<h2>WHAT\'S MISSING?</h2><div id="ai2"></div>';
+  aiCall('/ai/missing', {project_id: P.id}, 'miss');
+};
+
+/* ---------- completion dock ---------- */
+function dock() {
+  const c = LIVE && LIVE.completion;
+  $('#coach').textContent = coach();
+  $('#lastTest').innerHTML = lastTestLine();
+  const bu = $('#bUnd'); bu.style.display = P && P.kind === 'scanned' ? '' : 'none'; if (!bu.disabled) bu.textContent = P && P.graph.understanding ? 'Re-plan' : 'Understand';
+  $('#pct').textContent = c ? c.pct + '%' : '--';
+  $('#pbar').style.width = (c ? c.pct : 0) + '%';
+  $('#mods').innerHTML = c ? c.modules.map(m => `<div class="mod"><div class="top"><span class="nm" data-n="${esc(m.id)}" title="${esc(m.name)}">${esc(m.name)}</span><span>${m.pct}%</span></div>
+    <div class="bar"><i style="width:${m.pct}%"></i></div>
+    <div class="pills">${m.items.map(i => `<span class="pill ${i.done ? 'done' : ''} ${i.manual ? 'man' : ''}" data-k="${esc(i.id)}" data-d="${i.done}" data-m="${i.manual}" title="${esc(i.evidence || '')}">${i.label}</span>`).join('')}</div></div>`).join('') : '';
+  document.querySelectorAll('.mod .nm').forEach(el => el.onclick = () => { const id = el.dataset.n; if (VN.some(n => n.id === id)) pick({type: 'node', id}); });
+  document.querySelectorAll('.pill').forEach(el => el.onclick = e => setItem(el.dataset.k, e.altKey ? null : el.dataset.d !== 'true'));
+  $('#blk').innerHTML = c ? (c.blockers.map(b => `<div class="blk ${b.kind === 'task' || b.kind === 'tested' ? 't' : ''} ${b.edge ? 'lnk2' : ''}" data-e="${esc(b.edge || '')}">${esc(b.text)}</div>`).join('') || '<div style="color:var(--ok)">Nothing blocking - 100%</div>')
+    + (c.blocker_count > c.blockers.length ? `<div style="color:var(--txm)">+${c.blocker_count - c.blockers.length} more</div>` : '') : '';
+  document.querySelectorAll('.blk[data-e]').forEach(el => { if (el.dataset.e) el.onclick = () => { const l = VL.find(x => x.members.some(m => m.id === el.dataset.e)); if (l) pick({type: 'link', id: l.id}); }; });
+  $('#tlbl').textContent = c && c.tasks.length ? 'PROJECT TASKS' : '';
+  $('#tasks').innerHTML = c ? c.tasks.map(t => `<div class="task" data-t="${esc(t.id)}" data-d="${t.done}"><span class="pill ${t.done ? 'done' : ''}">${t.done ? 'x' : '&nbsp;'}</span>${esc(t.label)}</div>`).join('') : '';
+  document.querySelectorAll('.task').forEach(el => el.onclick = () => setItem(el.dataset.t, el.dataset.d !== 'true'));
+}
+async function setItem(key, value) { await post(`/projects/${P.id}/override`, {key, value}); P = await api('/projects/' + P.id); refreshLive(); }
+async function loadHistory() {
+  if (!P) return;
+  try { hist = await api(`/projects/${P.id}/history`); } catch (e) { hist = []; }
+  const s = d3.select('#spark'); s.selectAll('*').remove();
+  $('#sparkn').textContent = hist.length > 1 ? `progress over time (${hist.length} points)` : 'progress over time (collecting)';
+  if (hist.length < 2) { s.append('line').attr('x1', 0).attr('x2', 200).attr('y1', 40).attr('y2', 40).attr('stroke', '#16384e'); return; }
+  const xs = d3.scaleTime().domain(d3.extent(hist, d => new Date(d.t))).range([2, 198]), ys = d3.scaleLinear().domain([0, 100]).range([42, 4]);
+  s.append('path').datum(hist).attr('fill', 'none').attr('stroke', '#00d4ff').attr('stroke-width', 1.6).attr('d', d3.line().x(d => xs(new Date(d.t))).y(d => ys(d.pct)));
+}
+setInterval(loadHistory, 60000);
+
+
+
+/* ---------- charts: comparison radar + totals, novelty bars + scatter ---------- */
+const AX = [['speed', 'Speed to first win'], ['low_effort', 'Low effort'], ['low_cost', 'Low cost'], ['simplicity', 'Simplicity'], ['scalability', 'Scalability'], ['low_risk', 'Low risk'], ['fit', 'Fits your goal']];
+const APC = ['#00d4ff', '#ffb020', '#c46bff'];
+function radar(el, apps) {
+  const W = 320, H = 280, cx = 160, cy = 140, Rr = 96, n = AX.length, ang = i => -Math.PI / 2 + i * 2 * Math.PI / n;
+  const svg = d3.select(el).append('svg').attr('width', W).attr('height', H).attr('class', 'ax');
+  [2, 4, 6, 8, 10].forEach(l => svg.append('polygon').attr('fill', 'none').attr('stroke', '#16384e')
+    .attr('points', AX.map((_, i) => [cx + Rr * l / 10 * Math.cos(ang(i)), cy + Rr * l / 10 * Math.sin(ang(i))].join(',')).join(' ')));
+  AX.forEach((a, i) => {
+    svg.append('line').attr('x1', cx).attr('y1', cy).attr('x2', cx + Rr * Math.cos(ang(i))).attr('y2', cy + Rr * Math.sin(ang(i))).attr('stroke', '#16384e');
+    const c = Math.cos(ang(i));
+    svg.append('text').attr('x', cx + (Rr + 12) * c).attr('y', cy + (Rr + 12) * Math.sin(ang(i)) + 3).attr('text-anchor', Math.abs(c) < .2 ? 'middle' : c > 0 ? 'start' : 'end').text(a[1]);
+  });
+  apps.forEach((ap, k) => {
+    const pts = AX.map((a, i) => { const v = (ap.scores[a[0]] || 0) / 10; return [cx + Rr * v * Math.cos(ang(i)), cy + Rr * v * Math.sin(ang(i))]; });
+    svg.append('polygon').attr('points', pts.map(q => q.join(',')).join(' ')).attr('fill', APC[k]).attr('fill-opacity', .14).attr('stroke', APC[k]).attr('stroke-width', 1.8);
+    pts.forEach((q, i) => svg.append('circle').attr('cx', q[0]).attr('cy', q[1]).attr('r', 3).attr('fill', APC[k]).append('title').text(`${ap.name} - ${AX[i][1]}: ${ap.scores[AX[i][0]]}/10`));
+  });
+}
+function totals(el, apps, recId) {
+  const rows = apps.map((a, k) => ({a, k, t: AX.reduce((x, y) => x + (a.scores[y[0]] || 0), 0)})).sort((x, y) => y.t - x.t);
+  el.innerHTML = '<div class="lbl">OVERALL (sum of 7 scores, max 70)</div><div class="tot">' + rows.map(r => `<div class="trow"><span style="color:${APC[r.k]}">${esc(r.a.name)}${r.a.id === recId ? ' *' : ''}</span>
+    <div class="tbar"><i style="width:${r.t / 70 * 100}%;background:${APC[r.k]}"></i></div><b>${r.t}</b></div>`).join('') + '</div>'
+    + '<div style="color:var(--txm);margin-top:8px;font-size:10.5px">* recommended. Scores are the AI\'s judgement (10 = best on every axis) - use them to compare, not as facts.</div>';
+}
+function scatter(el, items) {
+  const W = 300, H = 250, m = 34, x = v => m + (v - 1) / 9 * (W - m - 12), y = v => H - m - (v - 1) / 9 * (H - m - 14);
+  const svg = d3.select(el).append('svg').attr('width', W).attr('height', H).attr('class', 'ax');
+  svg.append('rect').attr('x', x(6.5)).attr('y', y(10)).attr('width', x(10) - x(6.5)).attr('height', y(6.5) - y(10)).attr('fill', 'rgba(0,255,136,.07)').attr('stroke', 'rgba(0,255,136,.3)');
+  svg.append('text').attr('x', x(6.6)).attr('y', y(9.7)).text('sweet spot').attr('fill', '#00ff88').style('fill', '#00ff88');
+  svg.append('line').attr('x1', m).attr('y1', H - m).attr('x2', W - 8).attr('y2', H - m).attr('stroke', '#2a5a70');
+  svg.append('line').attr('x1', m).attr('y1', H - m).attr('x2', m).attr('y2', 8).attr('stroke', '#2a5a70');
+  svg.append('text').attr('x', W / 2).attr('y', H - 8).attr('text-anchor', 'middle').text('how doable (feasibility) ->');
+  svg.append('text').attr('transform', `translate(11,${H / 2}) rotate(-90)`).attr('text-anchor', 'middle').text('how original (novelty) ->');
+  items.forEach((d, i) => {
+    const g = svg.append('g').attr('transform', `translate(${x(d.feasibility)},${y(d.novelty)})`);
+    g.append('circle').attr('r', 10).attr('fill', '#08243c').attr('stroke', '#00d4ff').attr('stroke-width', 1.6);
+    g.append('text').attr('text-anchor', 'middle').attr('y', 4).style('fill', '#00d4ff').style('font-size', '11px').text(i + 1);
+    g.append('title').text(`${d.idea} (novelty ${d.novelty}, feasibility ${d.feasibility})`);
+  });
+}
+function renderNovelty(el, n) {
+  if (!el) return;
+  if (!n) { el.innerHTML = '<div class="box quiet">checking what already exists...</div>'; return; }
+  if (n.rate_limited) { el.innerHTML = '<div class="box quiet">Novelty check is rate limited - try again in a moment.</div>'; return; }
+  if (n.error) { el.innerHTML = `<div class="box quiet">${esc(n.error)}</div>`; return; }
+  const vc = {crowded: 'var(--fail)', niche: 'var(--slow)', open: 'var(--ok)'}[n.verdict] || 'var(--unk)';
+  const sc = v => v >= 70 ? 'var(--fail)' : v >= 40 ? 'var(--slow)' : 'var(--ok)';
+  el.innerHTML = `${n.grounded === false ? '<div class="quiet">From the model\'s memory (live search quota used up) - double-check the names.</div>' : ''}
+    <div class="box"><span class="badge" style="color:${vc}">${esc(n.verdict)}</span> ${esc(n.summary)}</div>
+    ${(n.existing || []).length ? '<div class="lbl">ALREADY OUT THERE - similarity to your idea (higher = more competition)</div>' + n.existing.map(x => `<div class="srow"><span title="${esc(x.what)}">${esc(x.name)}</span><div class="sbar"><i style="width:${x.similarity}%;background:${sc(x.similarity)}"></i></div><b>${x.similarity}%</b></div><div class="gap">${esc(x.what)} - gap: ${esc(x.gap)}</div>`).join('') : ''}
+    ${(n.differentiators || []).length ? '<div class="lbl" style="margin-top:12px">WHERE YOU COULD STAND OUT</div><div class="nsc"></div><div class="dl">' + n.differentiators.map((d, i) => `<div><b>${i + 1}.</b> ${esc(d.idea)}<br><span style="color:var(--txm)">${esc(d.why)} (novelty ${d.novelty}/10, doable ${d.feasibility}/10)</span></div>`).join('') + '</div>' : ''}
+    ${n.unique_angle ? `<div class="box" style="border-color:var(--ok)"><b style="color:var(--ok)">Your angle:</b> ${esc(n.unique_angle)}</div>` : ''}
+    ${(n.sources || []).length ? '<div style="color:var(--txm)">sources: ' + n.sources.map(u => { try { return esc(new URL(u).hostname); } catch (e) { return ''; } }).filter(Boolean).join(' - ') + '</div>' : ''}`;
+  if ((n.differentiators || []).length) scatter(el.querySelector('.nsc'), n.differentiators);
+}
+let NOV = null;
+async function fetchNovelty() {
+  NOV = null; const body = newBody();
+  try { NOV = await post('/ai/novelty', {name: body.name, type: body.type, idea: body.idea, motive: body.motive}); }
+  catch (e) { NOV = {error: e.message}; }
+  renderNovelty($('#nnov'), NOV);
+}
+async function noveltyNow() {
+  const b = $('#bNov'); if (b) b.disabled = true; renderNovelty($('#pnov'), null);
+  try { const r = await post('/ai/novelty', {project_id: P.id}); if (r.rate_limited) rateLimited(r.retry_after || 30); else if (!r.error) P.graph.novelty = r; renderNovelty($('#pnov'), r); }
+  catch (e) { renderNovelty($('#pnov'), {error: e.message}); }
+}
+
+/* ---------- think with me ---------- */
+$('#doThink').onclick = () => {
+  if (!$('#nname').value.trim()) { $('#nerr').textContent = 'Give the project a name first'; return; }
+  $('#nerr').textContent = ''; const first = $('#nidea').value.trim();
+  thinkReset();
+  THINK.msgs.push({role: 'assistant', content: "I'm in. Tell me what you want to build - and what is pulling you toward it. Why does this matter to you?"});
+  if (first) { THINK.msgs.push({role: 'user', content: first}); thinkSend(); } else showThink();
+};
+function showThink(busy) {
+  $('#nCard').classList.add('wide');
+  const users = THINK.msgs.filter(m => m.role === 'user').length;
+  $('#nstep2').innerHTML = `<div class="lbl" style="margin-top:14px">THINKING IT THROUGH - no building yet</div>
+    <div class="chat" id="chat">${THINK.msgs.map(m => `<div class="msg ${m.role}">${esc(m.content)}</div>`).join('')}${busy ? '<div class="msg assistant quiet">thinking...</div>' : ''}</div>
+    ${THINK.motive ? `<div class="box"><b style="color:var(--ok)">Your why:</b> ${esc(THINK.motive)}</div>` : ''}
+    <div class="row" style="display:flex;gap:8px"><input type="text" id="tin" placeholder="Answer, or add more..." ${busy ? 'disabled' : ''}><button class="btn" id="tsend" ${busy ? 'disabled' : ''}>Send</button></div>
+    <div class="row" style="display:flex;gap:8px"><button class="btn pri" id="tgo" ${users < 1 || busy ? 'disabled' : ''}>${THINK.ready ? 'Ready - compare options' : 'Enough - compare options'}</button><button class="btn" id="tback">Back</button></div>`;
+  const ch = $('#chat'); ch.scrollTop = ch.scrollHeight;
+  const send = () => { const v = $('#tin').value.trim(); if (!v) return; THINK.msgs.push({role: 'user', content: v}); thinkSend(); };
+  $('#tsend').onclick = send; $('#tin').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+  $('#tgo').onclick = () => { if (!THINK.idea) THINK.idea = THINK.msgs.filter(m => m.role === 'user').map(m => m.content).join(' '); $('#nstep2').innerHTML = ''; $('#doCmp').click(); };
+  $('#tback').onclick = resetNew;
+  if (!busy) $('#tin').focus();
+}
+async function thinkSend() {
+  showThink(true);
+  try {
+    const r = await post('/ai/think', {name: $('#nname').value.trim(), type: $('#ntype').value, messages: THINK.msgs});
+    if (r.rate_limited) { rateLimited(r.retry_after || 30); THINK.msgs.push({role: 'assistant', content: 'Taking a short breath - the free tier is rate limited. Say that again in a moment.'}); THINK.msgs.pop(); }
+    else if (r.error) THINK.msgs.push({role: 'assistant', content: r.error});
+    else { THINK.msgs.push({role: 'assistant', content: r.reply}); if (r.motive) THINK.motive = r.motive; if (r.idea) THINK.idea = r.idea; THINK.ready = !!r.ready; }
+  } catch (e) { THINK.msgs.push({role: 'assistant', content: e.message}); }
+  showThink();
+}
+
+/* ---------- clone a git repo ---------- */
+$('#doClone').onclick = async () => {
+  const url = $('#gurl').value.trim(); if (!url) return;
+  const st = $('#gstat'); $('#doClone').disabled = true; $('#oerr').textContent = '';
+  try {
+    st.textContent = 'cloning (this can take a minute)...';
+    const p = await post('/projects/clone', {url});
+    st.textContent = 'scanned - now understanding it...';
+    let note = '';
+    try {
+      const r = await post(`/projects/${p.id}/understand`);
+      if (r.rate_limited) { rateLimited(r.retry_after || 30); note = 'Cloned and scanned. AI is rate limited - press "Understand" in a moment.'; }
+      else if (r.error) note = 'Cloned and scanned. ' + r.error;
+    } catch (e) { note = 'Cloned and scanned. ' + e.message; }
+    $('#mOpen').classList.remove('show'); st.textContent = '';
+    await loadProjects(); await selectProject(p.id);
+    if (note) $('#insp').insertAdjacentHTML('afterbegin', `<div class="box quiet">${esc(note)}</div>`);
+  } catch (e) { $('#oerr').textContent = e.message; st.textContent = ''; }
+  $('#doClone').disabled = false;
+};
+async function understandNow() {
+  if (!P) return; const b = $('#bUnd'); b.disabled = true; b.textContent = 'Thinking...';
+  try {
+    const r = await post(`/projects/${P.id}/understand`);
+    if (r.rate_limited) { rateLimited(r.retry_after || 30); }
+    else if (r.error) { $('#insp').innerHTML = `<div class="box quiet">${esc(r.error)}</div>`; }
+    else { P = r; sel = null; inspEmpty(); refreshLive(); }
+  } catch (e) { $('#insp').innerHTML = `<div class="box quiet">${esc(e.message)}</div>`; }
+  b.disabled = false; dock();
+}
+$('#bUnd').onclick = understandNow;
+function copyBrief() {
+  const u = P.graph.understanding; if (!u) return;
+  const t = [`Project: ${P.name}${P.graph.source ? ' (' + P.graph.source.git + ')' : ''}`, `What it is: ${u.what}`, `State: ${u.state}`, '',
+    'Plan (do these in order; tell me what you will change and wait for my OK before big changes):'].concat(u.plan.map((x, i) => `${i + 1}. ${x.task} - ${x.why}`)).join(NL);
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => alert('Brief copied - paste it into your AI coding tool.'), () => prompt('Copy this brief:', t));
+}
+
+/* ---------- encouragement (from real progress, no AI call) ---------- */
+function coach() {
+  const c = LIVE && LIVE.completion; if (!P || !c) return '';
+  const motive = P.graph && P.graph.motive, out = [];
+  let delta = null;
+  if (hist.length > 1) { const wk = Date.now() - 7 * 864e5; const base = hist.find(h => new Date(h.t).getTime() >= wk) || hist[0]; delta = c.pct - base.pct; }
+  if (c.pct >= 100) out.push('Everything is built, tested and connected. Ship it.');
+  else {
+    if (delta > 0) out.push(`+${delta}% this week - real progress, keep the streak.`);
+    else if (c.pct > 0) out.push(`You are ${c.pct}% there. Every box you tick moves it.`);
+    else out.push('Day one. One small box is a start.');
+    if (c.blockers.length) out.push('Next small win: ' + c.blockers[0].text);
+  }
+  if (motive) out.push('Remember why: ' + motive);
+  return out.join('  ').slice(0, 260);
+}
+
+
+/* ---------- test center ---------- */
+const LTITLE = {static: 'Static', smoke: 'Smoke', contract: 'API contract', data: 'Data', bus: 'Bus', flows: 'Flows', security: 'Security', perf: 'Performance', resilience: 'Resilience', ui: 'UI', links: 'Link proof'};
+let TR = null, TSEL = null, TFLT = 'attention', tcTimer = null;
+const SIC = {pass: 'PASS', fail: 'FAIL', warn: 'WARN', skip: 'SKIP'};
+function lastTestLine() {
+  const h = P && P.overrides && P.overrides.test_history; if (!h || !h.length) return '';
+  const l = h[h.length - 1], col = l.fail ? 'var(--fail)' : l.warn ? 'var(--slow)' : 'var(--ok)';
+  return `Last test: <b style="color:${col}">${esc(l.verdict || '')}</b> ${l.pass} pass, ${l.warn} warn, ${l.fail} fail - ${ago(l.t)}`;
+}
+$('#bTest').onclick = () => { if (!P) return; $('#mTest').classList.add('show'); $('#tcTitle').textContent = 'TEST CYCLE - ' + P.name.toUpperCase(); tcLoad(true); };
+$('#tcClose').onclick = () => { $('#mTest').classList.remove('show'); clearInterval(tcTimer); selectProjectQuiet(); };
+async function selectProjectQuiet() { try { P = await api('/projects/' + P.id); dock(); } catch (e) {} }
+async function tcLoad(first) {
+  clearInterval(tcTimer);
+  try { TR = await api(`/projects/${P.id}/test`); } catch (e) { TR = null; }
+  tcRender();
+  if (TR && TR.status === 'running') tcTimer = setInterval(async () => { try { TR = await api(`/projects/${P.id}/test`); } catch (e) { return; } tcRender(); if (TR.status !== 'running') { clearInterval(tcTimer); } }, 1500);
+}
+$('#tcRun').onclick = async () => {
+  if (P.kind === 'planned') { $('#tcBody').innerHTML = '<div class="box quiet" style="margin:16px">This project is only a plan - nothing is built yet, so there is nothing to test. Build it first, or open the real folder.</div>'; return; }
+  try { await post(`/projects/${P.id}/test`, {ai: $('#tcAi').checked, destructive: false}); TSEL = null; TFLT = 'attention'; await tcLoad(); }
+  catch (e) { $('#tcBody').innerHTML = `<div style="padding:16px"><div class="box quiet"><b>${esc(e.message)}</b>${NL}${NL}How it will work for uploaded projects (not built yet):${NL}1. The scanner already finds every route, link, file and service.${NL}2. For FastAPI/Express projects the tests are generated from each service's own OpenAPI: a valid call and a bad-input call per route.${NL}3. Health probes, import/compile checks, secrets scan and link proof come from the scan.${NL}4. The UI harness clicks every button of the pages the project serves.${NL}5. You approve the generated test plan first, then it runs.</div></div>`; }
+};
+function bars(c) { const t = c.pass + c.warn + c.fail + c.skip || 1; return `<div class="stack"><i style="width:${100 * c.pass / t}%;background:var(--ok)"></i><i style="width:${100 * c.warn / t}%;background:var(--slow)"></i><i style="width:${100 * c.fail / t}%;background:var(--fail)"></i><i style="width:${100 * c.skip / t}%;background:var(--unk)"></i></div>`; }
+function tcRender() {
+  const body = $('#tcBody');
+  if (!TR || TR.status === 'none' || (!TR.layers && TR.status !== 'running')) {
+    body.innerHTML = `<div style="padding:18px;overflow:auto"><div class="verdict v-RUN">NO TEST RUN YET</div><div style="color:var(--txd);margin:8px 0 14px">Press <b>Run all tests</b>. Everything runs against the live system and cleans up after itself. Here is exactly what is checked:</div>
+      ${['static', 'smoke', 'contract', 'data', 'bus', 'flows', 'security', 'perf', 'resilience', 'ui', 'links'].map(id => `<div class="box"><b style="color:var(--c)">${LTITLE[id]}</b> - ${esc(LDESC[id])}</div>`).join('')}
+      <div style="color:var(--txm)">Status meanings: PASS = worked. WARN = works but needs attention (slow, flaky, known gap, risky default). FAIL = broken. SKIP = not run, with the reason shown. A failed test is retried once; if it then passes it is reported as flaky (WARN), never hidden.</div></div>`;
+    return;
+  }
+  if (!TR.layers) { body.innerHTML = `<div style="padding:18px"><div class="verdict v-RUN">${TR.status === 'error' ? 'RUN CRASHED' : 'STARTING...'}</div><div class="box quiet">${esc(TR.error || TR.current || '')}</div></div>`; return; }
+  const sm = TR.summary, running = TR.status === 'running';
+  const vcls = running ? 'v-RUN' : sm.fail ? 'v-FAIL' : sm.warn ? 'v-WARN' : 'v-PASS';
+  const cov = TR.coverage || {};
+  const covh = [cov.routes ? `API routes exercised <b>${cov.routes.tested}/${cov.routes.total}</b> (${cov.routes.pct}%)` : '', cov.links ? `map links proven by real traffic <b>${cov.links.proven}/${cov.links.total}</b> (${cov.links.pct}%)` : '',
+    cov.ui ? `UI elements clicked <b>${cov.ui.clicked}/${cov.ui.found}</b> on ${cov.ui.pages} pages (${cov.ui.skipped} skipped on purpose)` : '', cov.resilience ? `resilience drills <b>${cov.resilience.drills}</b>` : ''].filter(Boolean).join('<br>');
+  const layers = TR.layers;
+  if (!TSEL || !layers.some(l => l.id === TSEL)) TSEL = (layers.find(l => l.tests.some(t => t.status === 'fail')) || layers.find(l => l.tests.some(t => t.status === 'warn')) || layers[0]).id;
+  const cur = layers.find(l => l.id === TSEL);
+  const cnt = l => ({pass: l.tests.filter(t => t.status === 'pass').length, warn: l.tests.filter(t => t.status === 'warn').length, fail: l.tests.filter(t => t.status === 'fail').length, skip: l.tests.filter(t => t.status === 'skip').length, pend: l.tests.filter(t => t.status === 'pending').length});
+  const fl = cur.tests.filter(t => TFLT === 'all' || (TFLT === 'attention' ? (t.status === 'fail' || t.status === 'warn') : t.status === TFLT));
+  const slow = layers.flatMap(l => l.tests).filter(t => t.ms).sort((a, b) => b.ms - a.ms).slice(0, 5);
+  const hist = (TR.history || []);
+  body.innerHTML = `
+    <div class="bn"><div><div class="verdict ${vcls}">${running ? 'RUNNING' : esc(sm.verdict)}</div><div style="color:var(--txm)">${running ? esc(TR.current || '') : 'finished ' + ago(TR.finished) + ' - ' + Math.round(sm.ms / 1000) + 's of test time'}</div></div>
+      <div class="cnt"><span class="p">${sm.pass} pass</span><span class="w">${sm.warn} warn</span><span class="f">${sm.fail} fail</span><span class="s">${sm.skip} skip</span></div>
+      <div class="cov">${covh}</div>
+      ${running ? `<div style="flex:1;min-width:200px"><div class="bar"><i style="width:${Math.round(100 * (TR.done || 0) / Math.max(1, TR.total))}%"></i></div><div style="color:var(--txm)">${TR.done || 0} of ${TR.total || '?'} tests</div></div>` : ''}</div>
+    <div class="tcb"><div class="tcl">${layers.map(l => { const c = cnt(l), flag = c.fail ? 'var(--fail)' : c.warn ? 'var(--slow)' : (c.pass ? 'var(--ok)' : 'var(--unk)'); return `<div class="tl ${l.id === TSEL ? 'sel' : ''}" data-l="${l.id}">
+      <div class="t1"><b style="color:${flag}">${esc(l.name)}</b><span style="color:var(--txd)">${c.pass}/${l.tests.length - c.skip - c.pend || 0}${c.fail ? ' - ' + c.fail + ' fail' : ''}${c.warn ? ' - ' + c.warn + ' warn' : ''}</span></div>
+      <div class="ds">${esc(l.desc)}</div>${bars(c)}</div>`; }).join('')}</div>
+      <div class="tcr"><div class="flt"><b style="color:var(--c)">${esc(cur.name)}</b><span style="flex:1"></span>
+        ${['attention', 'all', 'fail', 'warn', 'pass', 'skip'].map(f => `<button class="btn ${TFLT === f ? 'on' : ''}" data-f="${f}">${f === 'attention' ? 'needs attention' : f}</button>`).join('')}</div>
+        <div class="trs">${fl.map((t, i) => `<div class="tr2 st-${t.status}" data-t="${i}"><span class="ic">${SIC[t.status] || t.status.toUpperCase()}</span><span>${esc(t.name)}${t.flaky ? ' <span class="badge b-slow">flaky</span>' : ''}</span><span class="mm">${t.ms != null ? t.ms + ' ms' : ''}</span></div>
+          <div class="td2">${esc(t.detail || '')}${t.expect != null && t.status === 'fail' ? `<br>expected: ${esc(typeof t.expect === 'string' ? t.expect : JSON.stringify(t.expect)).slice(0, 160)} - actual: ${esc(typeof t.actual === 'string' ? t.actual : JSON.stringify(t.actual)).slice(0, 200)}` : ''}</div>`).join('') || '<div style="padding:16px;color:var(--txm)">Nothing in this filter.</div>'}</div></div></div>
+    <div class="tft"><div>Slowest: ${slow.map(t => `<b>${(t.ms / 1000).toFixed(1)}s</b> ${esc(cut(t.name, 38))}`).join(' &nbsp;|&nbsp; ')}</div>
+      <div>History: ${hist.map(h => `<span class="hrun" title="${esc(h.verdict)} ${h.pass} pass ${h.warn} warn ${h.fail} fail - ${ago(h.t)}" style="background:${h.fail ? 'var(--fail)' : h.warn ? 'var(--slow)' : 'var(--ok)'}"></span>`).join('') || 'first run'}</div></div>`;
+  body.querySelectorAll('.tl').forEach(el => el.onclick = () => { TSEL = el.dataset.l; TFLT = 'attention'; tcRender(); });
+  body.querySelectorAll('[data-f]').forEach(el => el.onclick = () => { TFLT = el.dataset.f; tcRender(); });
+}
+const LDESC = {static: 'Every source file compiles, config parses, no secrets in code or URLs', smoke: 'Every service answers /health fast; models, databases and dashboard pages are present',
+  contract: "Every route in each service's OpenAPI: a valid call works, bad input is rejected cleanly, never a 5xx", data: 'PostgreSQL, Qdrant and Redis agree; full create, search and delete round trips',
+  bus: 'Publishing on Redis channels triggers the right reaction in the right service', flows: 'Real journeys across several services: voice, memory, browsing, research, projects',
+  security: 'Tokens enforced, no secrets leaked, hostile and oversized input handled', perf: 'Latency percentiles and concurrency on the main read and write paths',
+  resilience: 'A service is stopped on purpose: the map must turn it red, the rest must keep working, and it must recover (run: python aim.py test --chaos)',
+  ui: 'Every button, link and input on the dashboard pages exercised in a real browser', links: 'Every connection on the map carried real traffic during this run and none is failing'};
+
+/* ---------- UI harness: clicks every button on the dashboard pages inside hidden same-origin frames ---------- */
+const DANGER = /\bdel\b|delete|remove|clear|wipe|reset|decay|stop|shutdown|kill|clone|run all|run ui|compare|think|understand|re-plan|generate|plan it|send|rescan|scan &|mic|talk|notify me|export|download|check novelty|what's missing|explain/i;
+function hookScript() {
+  window.__err = [];
+  window.addEventListener('error', e => __err.push('js error: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'));
+  window.addEventListener('unhandledrejection', e => __err.push('unhandled promise: ' + ((e.reason && e.reason.message) || e.reason)));
+  const ce = console.error; console.error = function () { __err.push('console.error: ' + [].slice.call(arguments).join(' ').slice(0, 160)); ce.apply(console, arguments); };
+  const f = window.fetch;
+  window.fetch = async function () { const u = String(arguments[0]).replace(/^https?:\/\/[^\/]+/, ''); try { const r = await f.apply(this, arguments); if (r.status >= 500) __err.push('HTTP ' + r.status + ' ' + u); return r; } catch (e) { __err.push('network error ' + u); throw e; } };
+  window.confirm = () => false; window.alert = () => {}; window.prompt = () => null; window.open = () => null;
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const lbl = el => ((el.innerText || el.value || el.title || el.getAttribute('aria-label') || el.placeholder || el.id || el.tagName) + '').replace(/\s+/g, ' ').trim().slice(0, 44);
+const vis = el => { const r = el.getBoundingClientRect(); const st = el.ownerDocument.defaultView.getComputedStyle(el); return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none'; };
+
+async function harnessPage(page, tests, cov) {
+  const html = await (await fetch(`/${page}?aimtest=${Date.now()}`)).text();
+  const fr = document.createElement('iframe');
+  fr.style.cssText = 'position:fixed;left:-3000px;top:0;width:1400px;height:900px;border:0';
+  document.body.appendChild(fr);
+  const inject = `<base href="${location.origin}/">` + '<scr' + 'ipt>(' + hookScript.toString() + ')()</scr' + 'ipt>';
+  fr.srcdoc = html.replace(/<head[^>]*>/i, m => m + inject);
+  await new Promise(r => { fr.onload = r; setTimeout(r, 9000); });
+  await sleep(3500);
+  const w = fr.contentWindow, d = fr.contentDocument, add = (name, status, detail, ms) => tests.push({name: `${page}: ${name}`, status, detail: detail || '', ms: ms || 0});
+  try {
+    const loadErr = (w.__err || []).slice();
+    add('page loads without JavaScript errors or failed requests', loadErr.length ? 'fail' : 'pass', loadErr.slice(0, 4).join(' | '));
+    const seen = new WeakSet(), sigs = new Set(); let marker = (w.__err || []).length; const deadline = performance.now() + 100000; let timedOut = 0;
+    const sel = 'button, a[href], [onclick], input[type=button], input[type=submit], select, input[type=text], input[type=search], textarea, summary, [role=button]';
+    const closeOverlays = async () => {
+      d.dispatchEvent(new w.KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+      d.querySelectorAll('.modal.show [data-close], .modal.show .close, [class*=modal].show .close, .modal.open .close').forEach(b => { try { b.click(); } catch (e) {} });
+      await sleep(80);
+    };
+    // semantic controls + anything the page made clickable with JS (cursor:pointer on the outermost element that sets it)
+    const cands = () => d.querySelectorAll(sel).length ? [...d.querySelectorAll(sel)].concat([...d.querySelectorAll('div,span,li,td,label,svg,h3')].filter(e => {
+      const cs = w.getComputedStyle(e);
+      return cs.cursor === 'pointer' && !e.matches(sel) && !e.closest('button,a[href]') && (!e.parentElement || w.getComputedStyle(e.parentElement).cursor !== 'pointer');
+    })) : [];
+    async function pass(depth) {
+      const els = cands().filter(e => !seen.has(e) && vis(e));
+      for (const el of els) {
+        seen.add(el);
+        const name = lbl(el), tag = el.tagName.toLowerCase(), t0 = performance.now();
+        const sig = tag + '|' + el.id + '|' + name + '|' + String(el.className || '').slice(0, 30) + '|' + (el.getAttribute('href') || '');
+        if (sigs.has(sig)) continue;                       // the page re-created the same element (live-refreshed lists): already covered
+        sigs.add(sig); cov.found++;
+        if (performance.now() > deadline) { timedOut++; continue; }
+        if (tag === 'a' && el.getAttribute('href') && !el.getAttribute('href').startsWith('#') && !el.getAttribute('href').startsWith('javascript')) {
+          const h = el.getAttribute('href');
+          if (/^https?:\/\//.test(h) && !h.startsWith(location.origin)) { cov.skipped++; add(`link "${name}"`, 'skip', 'external link not followed: ' + h.slice(0, 60)); continue; }
+          try { const r = await fetch(new URL(h, location.origin + '/').href); cov.clicked++; add(`link "${name}" -> ${h}`, r.ok ? 'pass' : 'fail', r.ok ? '' : 'HTTP ' + r.status, Math.round(performance.now() - t0)); }
+          catch (e) { cov.clicked++; add(`link "${name}" -> ${h}`, 'fail', 'unreachable'); }
+          continue;
+        }
+        if (DANGER.test(name) || DANGER.test(el.id || '') || DANGER.test(el.getAttribute('onclick') || '') || el.dataset.del) { cov.skipped++; add(`button "${name}"`, 'skip', 'not clicked on purpose: it changes data, uses AI quota or needs the microphone (covered by API and flow tests)'); continue; }
+        marker = (w.__err || []).length;
+        try {
+          if (tag === 'select') { for (const o of [...el.options].slice(0, 6)) { el.value = o.value; el.dispatchEvent(new w.Event('change', {bubbles: true})); await sleep(60); } }
+          else if (tag === 'input' || tag === 'textarea') { el.focus(); el.value = 'aimtest'; el.dispatchEvent(new w.Event('input', {bubbles: true})); el.dispatchEvent(new w.Event('change', {bubbles: true})); await sleep(80); el.value = ''; el.dispatchEvent(new w.Event('input', {bubbles: true})); }
+          else {
+            const before = cands().filter(vis).length;
+            el.click();
+            for (let k = 0; k < 7; k++) { await sleep(k ? 250 : 300); if (cands().filter(vis).length !== before) { await sleep(250); break; } }   // wait until the page settles (modals load data first)
+          }
+        } catch (e) { (w.__err = w.__err || []).push('exception in handler: ' + e.message); }
+        const errs = (w.__err || []).slice(marker);
+        cov.clicked++;
+        add(`${tag === 'input' || tag === 'select' || tag === 'textarea' ? tag : 'click'} "${name}"`, errs.length ? 'fail' : 'pass', errs.slice(0, 3).join(' | '), Math.round(performance.now() - t0));
+        if (depth < 2) await pass(depth + 1);   // things the click revealed (modals, panels)
+        await closeOverlays();
+      }
+    }
+    await pass(0);
+    if (timedOut) add('time budget reached', 'warn', timedOut + ' element(s) were not clicked because this page used its 100 s budget');
+    await sleep(600);
+    const late = (w.__err || []).slice(marker);
+    if (late.length) add('no errors appeared after the interactions settled', 'fail', late.slice(0, 3).join(' | '));
+  } finally { fr.remove(); }
+}
+$('#tcUi').onclick = async () => {
+  if (!P) return; const b = $('#tcUi'); b.disabled = true;
+  if (!TR || !TR.layers) { $('#tcBody').innerHTML = '<div style="padding:16px"><div class="box quiet">Run the server-side tests first, then the UI tests are added to the same report.</div></div>'; b.disabled = false; return; }
+  const tests = [], cov = {pages: 0, found: 0, clicked: 0, skipped: 0};
+  try {
+    for (const page of ['index.html', 'timer.html', 'research.html']) {
+      b.textContent = 'UI: ' + page + '...'; cov.pages++;
+      try { await harnessPage(page, tests, cov); } catch (e) { tests.push({name: page + ': harness', status: 'fail', detail: e.message}); }
+    }
+    await post(`/projects/${P.id}/test/layer/ui`, {tests, coverage: cov});
+    TSEL = 'ui'; TFLT = tests.some(t => t.status === 'fail') ? 'attention' : 'all'; await tcLoad();
+  } catch (e) { alert(e.message); }
+  b.disabled = false; b.textContent = 'Run UI tests';
+};
+
+/* ---------- modals / buttons ---------- */
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => { b.closest('.modal').classList.remove('show'); if (typeof resetNew === 'function') resetNew(); });
+$('#bOpen').onclick = async () => {
+  $('#mOpen').classList.add('show'); $('#oerr').textContent = '';
+  try { const f = await api('/folders'); $('#folders').innerHTML = f.map(x => `<div class="fold" data-p="${esc(x.path)}"><span>${esc(x.name)}</span><span style="color:var(--txm)">${esc(x.stack.join(', ') || 'folder')}</span></div>`).join('');
+    document.querySelectorAll('.fold').forEach(el => el.onclick = () => { $('#fpath').value = el.dataset.p; }); } catch (e) { $('#folders').textContent = 'Research agent not reachable'; }
+};
+$('#doOpen').onclick = async () => {
+  const path = $('#fpath').value.trim(); if (!path) return;
+  $('#doOpen').disabled = true; $('#oerr').textContent = 'scanning...';
+  try { const p = await post('/projects/open', {path, name: path.endsWith('/aim-os') ? 'AIM OS' : null}); $('#mOpen').classList.remove('show'); await loadProjects(); await selectProject(p.id); $('#oerr').textContent = ''; }
+  catch (e) { $('#oerr').textContent = e.message; }
+  $('#doOpen').disabled = false;
+};
+$('#bNew').onclick = () => { resetNew(); $('#mNew').classList.add('show'); };
+let CMP = null, CMPPICK = null, THINK = {msgs: [], idea: '', motive: '', ready: false};
+function thinkReset() { THINK = {msgs: [], idea: '', motive: '', ready: false}; }
+const NL = String.fromCharCode(10);
+const newBody = extra => ({name: $('#nname').value.trim(), type: $('#ntype').value, idea: (THINK.idea || $('#nidea').value), motive: THINK.motive || null, ...(extra || {})});
+async function createProject(extra) {
+  try { const p = await post('/projects/new', newBody(extra)); $('#mNew').classList.remove('show'); resetNew(); await loadProjects(); await selectProject(p.id); }
+  catch (e) { $('#nerr').textContent = e.message; }
+}
+function resetNew() { thinkReset(); CMP = null; CMPPICK = null; $('#nstep2').innerHTML = ''; $('#nCard').classList.remove('wide'); $('#nerr').textContent = ''; }
+$('#doNew').onclick = () => { if (!$('#nname').value.trim()) { $('#nerr').textContent = 'Give the project a name'; return; } createProject(); };
+$('#doCmp').onclick = async () => {
+  if (!$('#nname').value.trim()) { $('#nerr').textContent = 'Give the project a name'; return; }
+  $('#nerr').textContent = ''; $('#nstep2').innerHTML = '<div class="box quiet">Researching what is realistic today... (about 10 s)</div>';
+  $('#doCmp').disabled = true;
+  try {
+    const r = await post('/ai/compare', newBody());
+    if (r.rate_limited) { rateLimited(r.retry_after || 30); $('#nstep2').innerHTML = '<div class="box quiet">Rate limited - the free tier needs a short pause. Try again in a moment, or skip the comparison.</div>'; }
+    else if (r.error) $('#nstep2').innerHTML = `<div class="box quiet">${esc(r.error)}</div>`;
+    else { CMP = r; CMPPICK = r.recommendation.id; NOV = null; showCompare(); fetchNovelty(); }
+  } catch (e) { $('#nstep2').innerHTML = `<div class="box quiet">${esc(e.message)}</div>`; }
+  $('#doCmp').disabled = false;
+};
+function showCompare() {
+  const r = CMP; $('#nCard').classList.add('wide');
+  const li = (a, c) => (a || []).map(x => `<li class="${c}">${c === 'pro' ? '+' : '-'} ${esc(x)}</li>`).join('');
+  const recName = (r.approaches.find(a => a.id === r.recommendation.id) || {}).name || '';
+  $('#nstep2').innerHTML = `
+    ${r.grounded === false ? '<div class="quiet" style="margin-top:10px">Live web search quota is used up - this comparison comes from the model\'s own knowledge, so double-check versions and prices.</div>' : ''}
+    <div class="lbl" style="margin-top:14px">WHAT WE ARE BUILDING</div>
+    <div class="box">${esc(r.building)}${(r.goals || []).length ? NL + NL + 'Goals:' + NL + r.goals.map(g => '- ' + esc(g)).join(NL) : ''}</div>
+    ${r.approaches.every(a => a.scores) ? '<div class="lbl">HOW THE OPTIONS COMPARE</div><div class="charts"><div id="rad"></div><div id="tot"></div></div>' : ''}
+    <div class="lbl">HOW WE COULD BUILD IT - pick one</div>
+    <div class="cmp">${r.approaches.map(a => `<div class="opt ${a.id === CMPPICK ? 'sel' : ''}" data-a="${a.id}">
+      ${a.id === r.recommendation.id ? '<span class="rec">RECOMMENDED</span>' : ''}
+      <h4>${esc(a.name)}</h4><div class="how">${esc(a.how)}</div>
+      <div class="stk">${(a.stack || []).map(t => `<span>${esc(t)}</span>`).join('')}</div>
+      <ul>${li(a.pros, 'pro')}${li(a.cons, 'con')}</ul>
+      <div class="meta">effort: ${esc(a.effort || '?')}<br>cost: ${esc(a.cost || '?')}<br>best for: ${esc(a.best_for || '-')}</div></div>`).join('')}</div>
+    <div class="box"><b style="color:var(--ok)">Why ${esc(recName)}:</b> ${esc(r.recommendation.why || '')}</div>
+    ${(r.risks || []).length ? '<div class="lbl">RISKS</div><div class="box">' + r.risks.map(x => '- ' + esc(x)).join(NL) + '</div>' : ''}
+    <div class="lbl">NOVELTY - WHAT ALREADY EXISTS AND HOW TO STAND OUT</div><div id="nnov"></div>
+    ${(r.questions || []).length ? '<div class="lbl">DECIDE BEFORE BUILDING (they become checklist tasks)</div><div class="box">' + r.questions.map(x => '? ' + esc(x)).join(NL) + '</div>' : ''}
+    ${(r.sources || []).length ? '<div class="lbl">SOURCES</div><div style="color:var(--txm)">' + r.sources.map(u => { try { return esc(new URL(u).hostname); } catch (e) { return ''; } }).filter(Boolean).join(' - ') + '</div>' : ''}
+    <div class="row" style="display:flex;gap:8px"><button class="btn pri" id="doBuild">Plan it with this approach</button><button class="btn" id="doBack">Back</button></div>`;
+  if (r.approaches.every(a => a.scores)) { radar($('#rad'), r.approaches); totals($('#tot'), r.approaches, r.recommendation.id); }
+  renderNovelty($('#nnov'), NOV);
+  document.querySelectorAll('.opt').forEach(el => el.onclick = () => { CMPPICK = el.dataset.a; showCompare(); });
+  $('#doBuild').onclick = () => createProject({approach: CMP.approaches.find(a => a.id === CMPPICK), comparison: CMP, novelty: NOV && !NOV.error && !NOV.rate_limited ? NOV : null});
+  $('#doBack').onclick = resetNew;
+}
+$('#vSvc').onclick = () => { view = 'services'; $('#vSvc').classList.add('on'); $('#vFile').classList.remove('on'); sel = null; inspEmpty(); render(); };
+$('#vFile').onclick = () => { view = 'files'; $('#vFile').classList.add('on'); $('#vSvc').classList.remove('on'); sel = null; inspEmpty(); render(); };
+$('#bFit').onclick = fit;
+$('#bLbl').onclick = () => { lblMode = {auto: 'all', all: 'focus', focus: 'off', off: 'auto'}[lblMode]; $('#bLbl').textContent = 'Labels: ' + lblMode; styleAll(); };
+$('#bRescan').onclick = async () => { if (!P) return; $('#bRescan').disabled = true; try { await post(`/projects/${P.id}/rescan`); await selectProject(P.id); } catch (e) { alert(e.message); } $('#bRescan').disabled = false; };
+$('#rq').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter' || !e.target.value.trim()) return;
+  const out = $('#rres'); out.textContent = 'researching...';
+  try { const r = await post('/research', {query: e.target.value.trim()});
+    out.innerHTML = esc(r.summary).slice(0, 700) + (r.key_points.length ? '<br>' + r.key_points.slice(0, 4).map(k => '- ' + esc(k)).join('<br>') : '') + (r.sources.length ? '<br><span style="color:var(--txm)">' + r.sources.length + ' sources</span>' : ''); }
+  catch (err) { out.textContent = err.message; }
+});
+window.addEventListener('resize', () => { if (P) fit(); });
+loadProjects();
+</script>
+</body>
+</html>

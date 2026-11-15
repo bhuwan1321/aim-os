@@ -1,0 +1,11 @@
+# Optional NVIDIA GPU for local models (Windows/Linux with NVIDIA Container Toolkit).
+# aim.py adds this file automatically when it detects `nvidia-smi`.
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>AIM Timer</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --c:#00d4ff;--cg:rgba(0,212,255,0.12);--cd:rgba(0,212,255,0.06);
+  --bg:#020b14;--bg2:#030f1c;--bg3:#041525;
+  --tx:#c8eeff;--txd:#4a7a9b;--txm:#1a3a52;
+  --bord:rgba(0,212,255,0.18);--bords:rgba(0,212,255,0.38);
+  --green:#00ff88;--amber:#ffaa00;--red:#ff3355;
+}
+html,body{
+  height:100%;background:var(--bg);color:var(--tx);
+  font-family:'Share Tech Mono',monospace;
+  user-select:none;overflow:hidden;
+}
+
+/* ── MAIN CARD ── */
+.card{
+  width:320px;margin:16px auto;
+  background:var(--bg2);
+  border:1px solid var(--bords);
+  position:relative;overflow:hidden;
+}
+.card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--c),transparent);
+  animation:hline 3s ease-in-out infinite;
+}
+@keyframes hline{0%,100%{opacity:.2}50%{opacity:1}}
+
+/* Corner brackets */
+.cb{position:absolute;width:10px;height:10px;pointer-events:none}
+.cb.tl{top:4px;left:4px;border-top:1px solid var(--c);border-left:1px solid var(--c)}
+.cb.tr{top:4px;right:4px;border-top:1px solid var(--c);border-right:1px solid var(--c)}
+.cb.bl{bottom:4px;left:4px;border-bottom:1px solid var(--c);border-left:1px solid var(--c)}
+.cb.br{bottom:4px;right:4px;border-bottom:1px solid var(--c);border-right:1px solid var(--c)}
+
+/* ── HEADER ── */
+.hdr{
+  display:flex;align-items:center;padding:10px 14px;
+  border-bottom:1px solid var(--bord);gap:10px;
+  background:var(--bg3);
+}
+.logo{font-family:'Orbitron',monospace;font-size:11px;font-weight:900;
+  letter-spacing:4px;color:var(--c);text-shadow:0 0 10px var(--c)}
+.mode-tabs{display:flex;gap:4px;margin-left:auto}
+.mtab{font-size:8px;letter-spacing:1.5px;padding:3px 8px;
+  border:1px solid var(--bord);color:var(--txd);cursor:pointer;
+  text-transform:uppercase;transition:.2s;background:transparent}
+.mtab:hover{border-color:var(--c);color:var(--c)}
+.mtab.act{border-color:var(--c);color:var(--c);background:var(--cg);
+  box-shadow:0 0 8px var(--cd)}
+
+/* ── RING ── */
+.ring-wrap{
+  display:flex;align-items:center;justify-content:center;
+  padding:24px 0 16px;position:relative;
+}
+.ring-svg{transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:var(--bg3);stroke-width:8}
+.ring-fill{
+  fill:none;stroke:var(--c);stroke-width:8;
+  stroke-linecap:round;
+  filter:drop-shadow(0 0 6px rgba(0,212,255,.6));
+  transition:stroke-dashoffset .5s ease, stroke .3s ease;
+}
+.ring-fill.warning{stroke:var(--amber);filter:drop-shadow(0 0 6px rgba(255,170,0,.6))}
+.ring-fill.danger{stroke:var(--red);filter:drop-shadow(0 0 6px rgba(255,51,85,.6))}
+
+.timer-display{
+  position:absolute;text-align:center;
+}
+.timer-time{
+  font-family:'Orbitron',monospace;font-size:32px;font-weight:700;
+  color:var(--c);text-shadow:0 0 20px var(--c),0 0 40px rgba(0,212,255,.4);
+  letter-spacing:2px;line-height:1;
+  transition:color .3s;
+}
+.timer-time.warning{color:var(--amber);text-shadow:0 0 20px var(--amber)}
+.timer-time.danger{color:var(--red);text-shadow:0 0 20px var(--red)}
+.timer-label{
+  font-size:9px;letter-spacing:3px;color:var(--txd);
+  text-transform:uppercase;margin-top:6px;
+}
+.pomodoro-count{
+  font-size:8px;letter-spacing:2px;color:var(--txm);
+  margin-top:4px;
+}
+.pom-dot{
+  display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--txm);margin:0 2px;transition:.3s;
+}
+.pom-dot.done{background:var(--c);box-shadow:0 0 5px var(--c)}
+.pom-dot.active{background:var(--amber);box-shadow:0 0 5px var(--amber);
+  animation:pd 1s ease-in-out infinite}
+@keyframes pd{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── CONTROLS ── */
+.controls{
+  display:flex;align-items:center;justify-content:center;
+  gap:10px;padding:0 14px 14px;
+}
+.cbtn{
+  background:transparent;border:1px solid var(--bord);color:var(--txd);
+  font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:2px;
+  padding:7px 14px;cursor:pointer;text-transform:uppercase;transition:.2s;
+}
+.cbtn:hover{border-color:var(--c);color:var(--c);box-shadow:0 0 8px var(--cd)}
+.cbtn.primary{
+  border-color:var(--c);color:var(--c);background:var(--cg);
+  font-size:10px;padding:8px 24px;
+  box-shadow:0 0 10px var(--cd);
+}
+.cbtn.primary:hover{box-shadow:0 0 20px rgba(0,212,255,.3)}
+.cbtn.primary.running{border-color:var(--amber);color:var(--amber);background:rgba(255,170,0,.08);
+  box-shadow:0 0 10px rgba(255,170,0,.15)}
+
+/* ── SESSION STATS ── */
+.stats-row{
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  border-top:1px solid var(--bord);
+}
+.stat{padding:8px;text-align:center;border-right:1px solid var(--bord)}
+.stat:last-child{border-right:none}
+.sval{font-family:'Orbitron',monospace;font-size:14px;color:var(--c);
+  text-shadow:0 0 8px rgba(0,212,255,.4)}
+.slbl{font-size:8px;color:var(--txm);letter-spacing:1px;
+  text-transform:uppercase;margin-top:2px}
+
+/* ── SETTINGS ── */
+.settings{
+  border-top:1px solid var(--bord);padding:10px 14px;
+  display:none;
+}
+.settings.open{display:block}
+.set-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.set-label{font-size:9px;color:var(--txd);letter-spacing:1px;width:90px}
+.set-input{
+  background:var(--bg3);border:1px solid var(--bord);color:var(--tx);
+  font-family:'Share Tech Mono',monospace;font-size:11px;
+  padding:3px 8px;width:60px;outline:none;text-align:center;
+}
+.set-input:focus{border-color:var(--c)}
+.set-unit{font-size:9px;color:var(--txm)}
+
+/* ── HISTORY ── */
+.history{
+  border-top:1px solid var(--bord);padding:8px 14px;
+  max-height:120px;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--bord) transparent;
+}
+.hist-label{font-size:9px;letter-spacing:2px;color:var(--txm);
+  text-transform:uppercase;margin-bottom:6px}
+.hist-item{
+  display:flex;justify-content:space-between;
+  font-size:10px;color:var(--txd);padding:3px 0;
+  border-bottom:1px solid rgba(0,212,255,.05);
+}
+.hist-item:last-child{border-bottom:none}
+.hist-mode{color:var(--c);font-size:9px;letter-spacing:1px}
+
+/* ── BOTTOM BAR ── */
+.bbar{
+  display:flex;align-items:center;padding:6px 14px;
+  border-top:1px solid var(--bord);background:var(--bg3);gap:8px;
+}
+.bbar-btn{
+  font-size:8px;letter-spacing:1px;color:var(--txm);
+  background:transparent;border:none;cursor:pointer;
+  font-family:'Share Tech Mono',monospace;text-transform:uppercase;
+  padding:2px 6px;transition:.2s;
+}
+.bbar-btn:hover{color:var(--c)}
+.bbar-status{margin-left:auto;font-size:8px;color:var(--txm);letter-spacing:1px}
+.bbar-status.live{color:var(--green)}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="cb tl"></div><div class="cb tr"></div>
+  <div class="cb bl"></div><div class="cb br"></div>
+
+  <!-- Header -->
+  <div class="hdr">
+    <div class="logo">AIM</div>
+    <div style="font-size:8px;letter-spacing:2px;color:var(--txd)">TIMER</div>
+    <div class="mode-tabs">
+      <div class="mtab act" onclick="setMode('pomodoro')">POMO</div>
+      <div class="mtab" onclick="setMode('focus')">FOCUS</div>
+      <div class="mtab" onclick="setMode('countdown')">COUNT</div>
+      <div class="mtab" onclick="setMode('stopwatch')">WATCH</div>
+    </div>
+  </div>
+
+  <!-- Ring -->
+  <div class="ring-wrap">
+    <svg class="ring-svg" width="160" height="160" viewBox="0 0 160 160">
+      <circle class="ring-bg" cx="80" cy="80" r="68"/>
+      <circle class="ring-fill" id="ringFill" cx="80" cy="80" r="68"
+        stroke-dasharray="427" stroke-dashoffset="0"/>
+    </svg>
+    <div class="timer-display">
+      <div class="timer-time" id="timerDisplay">25:00</div>
+      <div class="timer-label" id="timerLabel">FOCUS TIME</div>
+      <div class="pomodoro-count" id="pomCount">
+        <span class="pom-dot active" id="p1"></span>
+        <span class="pom-dot" id="p2"></span>
+        <span class="pom-dot" id="p3"></span>
+        <span class="pom-dot" id="p4"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="cbtn" onclick="resetTimer()">RESET</button>
+    <button class="cbtn primary" id="startBtn" onclick="toggleTimer()">START</button>
+    <button class="cbtn" onclick="skipPhase()">SKIP</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat">
+      <div class="sval" id="statPomos">0</div>
+      <div class="slbl">Pomodoros</div>
+    </div>
+    <div class="stat">
+      <div class="sval" id="statFocus">0m</div>
+      <div class="slbl">Focus Time</div>
+    </div>
+    <div class="stat">
+      <div class="sval" id="statBreaks">0</div>
+      <div class="slbl">Breaks</div>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="bbar">
+    <button class="bbar-btn" onclick="toggleSettings()">SETTINGS</button>
+    <button class="bbar-btn" onclick="toggleHistory()">HISTORY</button>
+    <div class="bbar-status" id="bbarStatus">READY</div>
+  </div>
+
+  <!-- Settings panel -->
+  <div class="settings" id="settingsPanel">
+    <div class="set-row">
+      <span class="set-label">Focus</span>
+      <input class="set-input" id="setFocus" type="number" value="25" min="1" max="90"/>
+      <span class="set-unit">min</span>
+    </div>
+    <div class="set-row">
+      <span class="set-label">Short Break</span>
+      <input class="set-input" id="setShort" type="number" value="5" min="1" max="30"/>
+      <span class="set-unit">min</span>
+    </div>
+    <div class="set-row">
+      <span class="set-label">Long Break</span>
+      <input class="set-input" id="setLong" type="number" value="15" min="1" max="60"/>
+      <span class="set-unit">min</span>
+    </div>
+    <div class="set-row">
+      <span class="set-label">Countdown</span>
+      <input class="set-input" id="setCountdown" type="number" value="10" min="1" max="120"/>
+      <span class="set-unit">min</span>
+    </div>
+    <button class="cbtn" style="width:100%;margin-top:4px" onclick="applySettings()">APPLY</button>
+  </div>
+
+  <!-- History panel -->
+  <div class="history" id="historyPanel" style="display:none">
+    <div class="hist-label">Session History</div>
+    <div id="historyList">
+      <div class="hist-item" style="color:var(--txm);font-size:10px">No sessions yet</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────
+const CIRCUMFERENCE = 427;
+let mode       = 'pomodoro';
+let running    = false;
+let interval   = null;
+let seconds    = 25 * 60;
+let totalSecs  = 25 * 60;
+let phase      = 'focus'; // focus | short | long
+let pomoDone   = 0;
+let totalFocus = 0;
+let totalBreaks= 0;
+let history    = [];
+
+// Settings
+let cfg = {
+  focus:     25,
+  shortBreak: 5,
+  longBreak:  15,
+  countdown:  10,
+};
+
+// ── ELEMENTS ──────────────────────────────────
+const display   = document.getElementById('timerDisplay');
+const label     = document.getElementById('timerLabel');
+const ring      = document.getElementById('ringFill');
+const startBtn  = document.getElementById('startBtn');
+const bbarStatus= document.getElementById('bbarStatus');
+
+// ── MODE SETUP ────────────────────────────────
+function setMode(m) {
+  if (running) return;
+  mode = m;
+  document.querySelectorAll('.mtab').forEach(t => t.classList.remove('act'));
+  event.target.classList.add('act');
+
+  // Reset pomodoro dots visibility
+  document.getElementById('pomCount').style.display =
+    m === 'pomodoro' ? 'block' : 'none';
+
+  switch(m) {
+    case 'pomodoro':
+      phase = 'focus';
+      seconds = totalSecs = cfg.focus * 60;
+      label.textContent = 'FOCUS TIME';
+      break;
+    case 'focus':
+      seconds = totalSecs = cfg.focus * 60;
+      label.textContent = 'DEEP FOCUS';
+      break;
+    case 'countdown':
+      seconds = totalSecs = cfg.countdown * 60;
+      label.textContent = 'COUNTDOWN';
+      break;
+    case 'stopwatch':
+      seconds = 0; totalSecs = 1;
+      label.textContent = 'STOPWATCH';
+      break;
+  }
+  updateDisplay();
+  updateRing();
+  setRingColor();
+}
+
+// ── TIMER CORE ────────────────────────────────
+function toggleTimer() {
+  if (running) {
+    pauseTimer();
+  } else {
+    startTimer();
+  }
+}
+
+function startTimer() {
+  running = true;
+  startBtn.textContent = 'PAUSE';
+  startBtn.classList.add('running');
+  bbarStatus.textContent = 'RUNNING';
+  bbarStatus.className = 'bbar-status live';
+
+  interval = setInterval(() => {
+    if (mode === 'stopwatch') {
+      seconds++;
+      totalSecs = Math.max(totalSecs, seconds);
+    } else {
+      seconds--;
+      if (seconds <= 0) {
+        onComplete();
+        return;
+      }
+    }
+    updateDisplay();
+    updateRing();
+    setRingColor();
+  }, 1000);
+}
+
+function pauseTimer() {
+  running = false;
+  clearInterval(interval);
+  startBtn.textContent = 'RESUME';
+  startBtn.classList.remove('running');
+  bbarStatus.textContent = 'PAUSED';
+  bbarStatus.className = 'bbar-status';
+}
+
+function resetTimer() {
+  running = false;
+  clearInterval(interval);
+  startBtn.textContent = 'START';
+  startBtn.classList.remove('running');
+  bbarStatus.textContent = 'READY';
+  bbarStatus.className = 'bbar-status';
+
+  if (mode === 'stopwatch') {
+    seconds = 0; totalSecs = 1;
+  } else if (mode === 'pomodoro') {
+    phase = 'focus';
+    seconds = totalSecs = cfg.focus * 60;
+    label.textContent = 'FOCUS TIME';
+    updatePomoDots();
+  } else if (mode === 'focus') {
+    seconds = totalSecs = cfg.focus * 60;
+  } else if (mode === 'countdown') {
+    seconds = totalSecs = cfg.countdown * 60;
+  }
+  updateDisplay();
+  updateRing();
+  setRingColor();
+}
+
+function skipPhase() {
+  if (mode !== 'pomodoro') return;
+  clearInterval(interval);
+  running = false;
+  onComplete();
+}
+
+function onComplete() {
+  clearInterval(interval);
+  running = false;
+  startBtn.textContent = 'START';
+  startBtn.classList.remove('running');
+
+  // Play sound
+  playBeep();
+
+  // Log to history
+  const now = new Date().toTimeString().slice(0,5);
+  history.unshift({
+    time: now,
+    mode: mode.toUpperCase(),
+    phase: phase,
+    duration: formatTime(totalSecs - seconds || totalSecs)
+  });
+  updateHistoryUI();
+
+  // Log to AIM timeline
+  logToTimeline();
+
+  if (mode === 'pomodoro') {
+    if (phase === 'focus') {
+      pomoDone++;
+      totalFocus += cfg.focus;
+      updateStats();
+      updatePomoDots();
+
+      if (pomoDone % 4 === 0) {
+        phase = 'long';
+        seconds = totalSecs = cfg.longBreak * 60;
+        label.textContent = 'LONG BREAK';
+        totalBreaks++;
+      } else {
+        phase = 'short';
+        seconds = totalSecs = cfg.shortBreak * 60;
+        label.textContent = 'SHORT BREAK';
+        totalBreaks++;
+      }
+      bbarStatus.textContent = 'BREAK TIME';
+    } else {
+      phase = 'focus';
+      seconds = totalSecs = cfg.focus * 60;
+      label.textContent = 'FOCUS TIME';
+      bbarStatus.textContent = 'READY';
+    }
+    updateDisplay();
+    updateRing();
+    setRingColor();
+    // Auto start next phase
+    startTimer();
+  } else {
+    seconds = 0;
+    updateDisplay();
+    updateRing();
+    bbarStatus.textContent = 'DONE';
+  }
+  updateStats();
+}
+
+// ── DISPLAY ───────────────────────────────────
+function updateDisplay() {
+  display.textContent = formatTime(seconds);
+}
+
+function formatTime(s) {
+  if (mode === 'stopwatch' || s > 3600) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  }
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+function updateRing() {
+  if (mode === 'stopwatch') {
+    ring.style.strokeDashoffset = 0;
+    return;
+  }
+  const pct = seconds / totalSecs;
+  ring.style.strokeDashoffset = CIRCUMFERENCE * (1 - pct);
+}
+
+function setRingColor() {
+  const pct = seconds / totalSecs;
+  if (mode === 'stopwatch') return;
+  if (pct <= 0.1) {
+    ring.className = 'ring-fill danger';
+    display.className = 'timer-time danger';
+  } else if (pct <= 0.25) {
+    ring.className = 'ring-fill warning';
+    display.className = 'timer-time warning';
+  } else {
+    ring.className = 'ring-fill';
+    display.className = 'timer-time';
+  }
+}
+
+// ── POMODORO DOTS ─────────────────────────────
+function updatePomoDots() {
+  for (let i = 1; i <= 4; i++) {
+    const dot = document.getElementById('p' + i);
+    const cycle = pomoDone % 4;
+    if (i <= cycle) {
+      dot.className = 'pom-dot done';
+    } else if (i === cycle + 1) {
+      dot.className = 'pom-dot active';
+    } else {
+      dot.className = 'pom-dot';
+    }
+  }
+}
+
+// ── STATS ─────────────────────────────────────
+function updateStats() {
+  document.getElementById('statPomos').textContent = pomoDone;
+  document.getElementById('statFocus').textContent =
+    totalFocus >= 60 ? Math.floor(totalFocus/60)+'h' : totalFocus+'m';
+  document.getElementById('statBreaks').textContent = totalBreaks;
+}
+
+// ── SETTINGS ──────────────────────────────────
+function toggleSettings() {
+  const p = document.getElementById('settingsPanel');
+  const h = document.getElementById('historyPanel');
+  h.style.display = 'none';
+  p.classList.toggle('open');
+}
+
+function applySettings() {
+  cfg.focus      = parseInt(document.getElementById('setFocus').value) || 25;
+  cfg.shortBreak = parseInt(document.getElementById('setShort').value) || 5;
+  cfg.longBreak  = parseInt(document.getElementById('setLong').value) || 15;
+  cfg.countdown  = parseInt(document.getElementById('setCountdown').value) || 10;
+  resetTimer();
+  document.getElementById('settingsPanel').classList.remove('open');
+}
+
+// ── HISTORY ───────────────────────────────────
+function toggleHistory() {
+  const h = document.getElementById('historyPanel');
+  const s = document.getElementById('settingsPanel');
+  s.classList.remove('open');
+  h.style.display = h.style.display === 'none' ? 'block' : 'none';
+}
+
+function updateHistoryUI() {
+  const list = document.getElementById('historyList');
+  if (history.length === 0) return;
+  list.innerHTML = history.slice(0,8).map(h =>
+    `<div class="hist-item">
+      <span class="hist-mode">${h.mode}</span>
+      <span>${h.phase || ''}</span>
+      <span>${h.time}</span>
+    </div>`
+  ).join('');
+}
+
+// ── BEEP ──────────────────────────────────────
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const beepSeq = [880, 660, 880];
+    beepSeq.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.2);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.15);
+      osc.start(ctx.currentTime + i * 0.2);
+      osc.stop(ctx.currentTime + i * 0.2 + 0.15);
+    });
+  } catch(e) {}
+}
+
+// ── LOG TO AIM TIMELINE ───────────────────────
+function logToTimeline() {
+  fetch('http://localhost:8002/events', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      event_type: 'timer.complete',
+      description: `${mode} ${phase} session complete — ${formatTime(totalSecs)}`,
+      app: 'aim-timer',
+      focus_score: phase === 'focus' ? 0.9 : 0.3
+    })
+  }).catch(() => {});
+}
+
+// ── INIT ──────────────────────────────────────
+document.getElementById('pomCount').style.display = 'block';
+updateDisplay();
+updateRing();
+updatePomoDots();
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); toggleTimer(); }
+  if (e.code === 'KeyR')  resetTimer();
+  if (e.code === 'KeyS')  skipPhase();
+});
+</script>
+</body>
+</html>

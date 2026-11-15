@@ -1,0 +1,300 @@
+{
+  "info": {
+    "name": "AIM OS smoke tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "LLM Router health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8001/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK',()=>pm.response.to.have.status(200));",
+              "pm.test('status ok',()=>pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Timeline health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8002/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK',()=>pm.response.to.have.status(200));",
+              "pm.test('status ok',()=>pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Memory health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8003/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK',()=>pm.response.to.have.status(200));",
+              "pm.test('status ok',()=>pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Brain health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8004/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK',()=>pm.response.to.have.status(200));",
+              "pm.test('status ok',()=>pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8006/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK',()=>pm.response.to.have.status(200));",
+              "pm.test('status ok',()=>pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Browser agent health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8007/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK',()=>pm.response.to.have.status(200));",
+              "pm.test('status ok',()=>pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Voice agent health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8008/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK',()=>pm.response.to.have.status(200));",
+              "pm.test('status ok',()=>pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Qdrant ready",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:6333/readyz"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function(){pm.response.to.have.status(200);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard serves UI",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8888/index.html"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function(){pm.response.to.have.status(200);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Timeline: today",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8002/events/today"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function(){pm.response.to.have.status(200);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Timeline: stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8002/stats"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function(){pm.response.to.have.status(200);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Memory: list",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8003/memories"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function(){pm.response.to.have.status(200);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "LLM Router: models",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:8001/models"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function(){pm.response.to.have.status(200);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Host bridge health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:9999/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function(){pm.response.to.have.status(200);});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Host bridge system stats",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "http://localhost:9999/system-stats"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function(){pm.response.to.have.status(200);});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
