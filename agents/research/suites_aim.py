@@ -102,6 +102,13 @@ async def cloud_ai(ctx):
     that is an environment limit, not a code defect, so such tests warn instead of failing."""
     if "cloud_ai" not in ctx.shared:
         try:
+            st = (await ctx.call("GET", U("research-agent", "/search/status"))).json()
+            if st.get("tavily") and not st.get("paused"):
+                ctx.shared["cloud_ai"] = True          # live search + the free Groq model: no Gemini needed
+                return True
+        except Exception:
+            pass
+        try:
             r = await ctx.call("POST", U("llm-router", "/route"), json={"task": "research", "prompt": "Reply with the single word OK"}, timeout=60)
             ctx.shared["cloud_ai"] = r.status == 200 and r.json().get("provider") == "google"
         except TestFail:
@@ -118,7 +125,8 @@ async def purge_test_rows(ctx):
     r = await ctx.call("GET", U("memory", "/memories?limit=200"))
     if r.status == 200:
         for m in r.json():
-            if MARK in (m.get("content") or "") or MARK in str(m.get("source", "")):
+            c = m.get("content") or ""
+            if MARK in c or MARK in str(m.get("source", "")) or (m.get("source") == "aim.browser.tab" and "dashboard:8888" in c):
                 await del_memory(ctx, m["id"])
 
 
@@ -539,16 +547,16 @@ def bus_tests(ctx):
         r = rclient(); ps = r.pubsub()
         try:
             await ps.subscribe("aim.research.result"); await ps.get_message(timeout=1)
-            await pub("aim.research.request", {"query": f"{MARK} what does Redis PUBSUB NUMSUB do"})
-            m = await until(lambda: ps.get_message(ignore_subscribe_messages=True, timeout=1), 90, 1)
-            check(m, "research agent never answered aim.research.request within 90 s", "aim.research.result", "silence")
-            d = json.loads(m["data"])
-            if d.get("memory_id"):
-                track_memory(ctx, d["memory_id"])
-            check(d.get("summary"), "research result has an empty summary")
+            resp = await ctx.call("POST", U("research-agent", "/research"), json={"query": f"{MARK} what does Redis PUBSUB NUMSUB do"}, timeout=150)
+            check(resp.status == 200, f"research returned {resp.status}")
+            if resp.json().get("stored_memory_id"):
+                track_memory(ctx, resp.json()["stored_memory_id"])
+            m = await until(lambda: ps.get_message(ignore_subscribe_messages=True, timeout=1), 10)
+            check(m, "a finished research was not announced on aim.research.result", "an event", "silence")
+            check(json.loads(m["data"]).get("summary"), "the announced result has an empty summary")
         finally:
             await ps.aclose(); await r.aclose()
-    out.append(T("bus", "research: a request on the bus produces a stored result", research_bus, ai=True, timeout=120))
+    out.append(T("bus", "research: a finished research is announced on the bus (and becomes an alert)", research_bus, ai=True, timeout=180))
     return out
 
 

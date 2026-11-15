@@ -144,7 +144,7 @@ async def call_groq(model: str, prompt: str, context: Optional[str]) -> RouteRes
         resp = await client.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {GROQ_KEY}"},
-            json={"model": model, "messages": messages, "max_tokens": 2048}
+            json={"model": model, "messages": messages, "max_tokens": 6000, **({"reasoning_effort": "low"} if "gpt-oss" in model else {})}
         )
         resp.raise_for_status()
         data = resp.json()

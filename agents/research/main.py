@@ -160,7 +160,6 @@ async def startup():
                                password=os.getenv("REDIS_PASSWORD"), decode_responses=True)
     KNOWN_SVC.update({"llm-router", "memory", "brain", "timeline", "notification", "voice-agent", "browser-agent",
                       "research-agent", "dashboard"})
-    asyncio.create_task(listen_events())
     asyncio.create_task(bus_monitor())
     asyncio.create_task(ipmap_refresher())
     logger.info("Research Agent started")
@@ -1561,7 +1560,11 @@ async def ai_compare(req: NewReq):
             return {"error": out.get("error", "model unavailable")}
         text = out["text"]
     try:
-        d = _extract_json(text)
+        try:
+            d = _extract_json(text)
+        except Exception:                     # truncated or chatty output: ask once more, compactly
+            out2 = await ask_llm("fast", prompt + chr(10) + chr(10) + "Your previous answer could not be parsed. Answer again with ONLY the JSON object, compact: at most 3 pros and 3 cons per approach, one short sentence each.", "Answer only with the requested JSON.")
+            d = _extract_json(out2.get("text", ""))
         apps = d.get("approaches") or []
         if not apps:
             raise ValueError("no approaches")
@@ -1727,58 +1730,18 @@ async def store_research(query: str, result: dict, project_id: Optional[str]) ->
         return None
 
 
-async def already_researched(query: str) -> bool:
-    try:
-        res = (await mem("POST", "/memories/search", json={"query": query, "limit": 1})).get("results", [])
-        return bool(res and res[0]["score"] > 0.92 and "research" in (res[0].get("tags") or []))
-    except Exception:
-        return False
-
-
-async def listen_events():
-    """Keeps the bus listener alive: a dropped Redis connection must never silently stop event handling."""
-    while True:
-        try:
-            await _listen_once()
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.warning("event listener restarting after %s", type(e).__name__)
-            await asyncio.sleep(2)
-
-
-async def _listen_once():
-    await asyncio.sleep(2)
-    pubsub = redis_client.pubsub()
-    await pubsub.subscribe("aim.research.request")
-    logger.info("Research Agent listening...")
-    async for message in pubsub.listen():
-        if message["type"] != "message":
-            continue
-        try:
-            data = json.loads(message["data"])
-            if data.get("query"):
-                await handle_research(data["query"], data.get("context"), data.get("project_id"))
-        except Exception as e:
-            logger.error("Research event error: %s", type(e).__name__)
-
-
-async def handle_research(query, context, project_id):
-    if await already_researched(query):
-        return
-    result = await gemini_search(query, context)
-    memory_id = await store_research(query, result, project_id)
-    await redis_client.publish("aim.research.result", json.dumps({
-        "query": query, "summary": result.get("summary", ""), "key_points": result.get("key_points", []),
-        "sources": result.get("sources", []), "memory_id": memory_id, "timestamp": datetime.utcnow().isoformat()}))
-    await redis_client.publish("aim.notification.send", json.dumps({
-        "title": "AIM Research", "message": f"Found info on: {query[:50]}", "confidence": 0.9, "source": "research-agent"}))
-
-
 @app.post("/research", response_model=ResearchResult)
 async def research(req: ResearchRequest):
     result = await gemini_search(req.query, req.context)
     memory_id = await store_research(req.query, result, None)
+    try:        # announce the finished research: the notification service turns it into an alert
+        await redis_client.publish("aim.research.result", json.dumps({
+            "query": req.query, "summary": result.get("summary", ""), "key_points": result.get("key_points", []),
+            "sources": result.get("sources", []), "memory_id": memory_id, "timestamp": datetime.utcnow().isoformat()}))
+        await redis_client.publish("aim.notification.send", json.dumps({
+            "title": "AIM Research", "message": f"Found info on: {req.query[:50]}", "confidence": 0.9, "source": "research-agent"}))
+    except Exception as e:
+        logger.warning("could not announce research result: %s", type(e).__name__)
     return ResearchResult(query=req.query, summary=result.get("summary", ""), key_points=result.get("key_points", []),
                           sources=result.get("sources", []), stored_memory_id=memory_id, timestamp=datetime.utcnow().isoformat())
 
