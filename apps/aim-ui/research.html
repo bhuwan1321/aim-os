@@ -853,10 +853,31 @@ async function tcLoad(first) {
   tcRender();
   if (TR && TR.status === 'running') tcTimer = setInterval(async () => { try { TR = await api(`/projects/${P.id}/test`); } catch (e) { return; } tcRender(); if (TR.status !== 'running') { clearInterval(tcTimer); } }, 1500);
 }
+let GEN = {mutating: false};
+async function showGenPlan() {
+  $('#tcBody').innerHTML = '<div style="padding:18px"><div class="box quiet">Reading the project and generating a test plan...</div></div>';
+  let pl; try { pl = await post(`/projects/${P.id}/test/plan?mutating=${GEN.mutating}`); } catch (e) { $('#tcBody').innerHTML = `<div style="padding:18px"><div class="box quiet">${esc(e.message)}</div></div>`; return; }
+  if (pl.aim) { return runSuite({}); }
+  const kc = {'reads files only': 'var(--ok)', 'read-only GET call to your running service': 'var(--c)'};
+  $('#tcBody').innerHTML = `<div style="padding:16px;overflow:auto;flex:1"><div class="verdict v-RUN" style="font-size:16px">GENERATED TEST PLAN - needs your approval</div>
+    <div class="box">${pl.notes.map(n => esc(n)).join(NL)}</div>
+    <label style="display:flex;gap:8px;align-items:center;margin:8px 0;color:var(--slow)"><input type="checkbox" id="genMut" ${GEN.mutating ? 'checked' : ''} style="width:auto"> also call POST / PUT / PATCH / DELETE routes and send invalid input (may change this project's data)</label>
+    <div class="cnt" style="margin:8px 0">${Object.entries(pl.kinds).map(([k, n]) => `<span style="color:${kc[k] || 'var(--slow)'};border-color:currentColor">${n} - ${esc(k)}</span>`).join('')}</div>
+    ${pl.layers.map(l => `<div class="lbl" style="margin-top:12px">${esc(l.name.toUpperCase())} - ${esc(l.desc)}</div>` + l.tests.slice(0, 40).map(t => `<div style="color:var(--txd)">- ${esc(t.name)} <span style="color:var(--txm)">[${esc(t.kind)}]</span></div>`).join('') + (l.tests.length > 40 ? `<div style="color:var(--txm)">... and ${l.tests.length - 40} more</div>` : '')).join('')}
+    <div class="row" style="display:flex;gap:8px;margin-top:16px"><button class="btn pri" id="genGo">Approve and run</button><button class="btn" id="genNo">Cancel</button></div></div>`;
+  $('#genMut').onchange = e => { GEN.mutating = e.target.checked; showGenPlan(); };
+  $('#genGo').onclick = () => runSuite({approved: true, mutating: GEN.mutating});
+  $('#genNo').onclick = () => { $('#mTest').classList.remove('show'); };
+}
+async function runSuite(extra) {
+  try { await post(`/projects/${P.id}/test`, {ai: $('#tcAi').checked, destructive: false, ...(extra || {})}); TSEL = null; TFLT = 'attention'; await tcLoad(); }
+  catch (e) { $('#tcBody').innerHTML = `<div style="padding:16px"><div class="box quiet"><b>${esc(e.message)}</b></div></div>`; }
+}
 $('#tcRun').onclick = async () => {
   if (P.kind === 'planned') { $('#tcBody').innerHTML = '<div class="box quiet" style="margin:16px">This project is only a plan - nothing is built yet, so there is nothing to test. Build it first, or open the real folder.</div>'; return; }
-  try { await post(`/projects/${P.id}/test`, {ai: $('#tcAi').checked, destructive: false}); TSEL = null; TFLT = 'attention'; await tcLoad(); }
-  catch (e) { $('#tcBody').innerHTML = `<div style="padding:16px"><div class="box quiet"><b>${esc(e.message)}</b>${NL}${NL}How it will work for uploaded projects (not built yet):${NL}1. The scanner already finds every route, link, file and service.${NL}2. For FastAPI/Express projects the tests are generated from each service's own OpenAPI: a valid call and a bad-input call per route.${NL}3. Health probes, import/compile checks, secrets scan and link proof come from the scan.${NL}4. The UI harness clicks every button of the pages the project serves.${NL}5. You approve the generated test plan first, then it runs.</div></div>`; }
+  const isAim = P.root && (P.graph.nodes || []).some(n => n.id === 'agents/research/suites_aim.py' || n.path === 'agents/research/suites_aim.py') ;
+  if (isAim || P.name === 'AIM OS') return runSuite({});
+  return showGenPlan();
 };
 function bars(c) { const t = c.pass + c.warn + c.fail + c.skip || 1; return `<div class="stack"><i style="width:${100 * c.pass / t}%;background:var(--ok)"></i><i style="width:${100 * c.warn / t}%;background:var(--slow)"></i><i style="width:${100 * c.fail / t}%;background:var(--fail)"></i><i style="width:${100 * c.skip / t}%;background:var(--unk)"></i></div>`; }
 function tcRender() {

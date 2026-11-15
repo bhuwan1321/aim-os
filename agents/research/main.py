@@ -26,6 +26,7 @@ from pydantic import BaseModel
 import planner
 import scanner
 import suites_aim
+import suites_generic
 import tester
 
 logging.basicConfig(level=os.getenv("AIM_LOG_LEVEL", "INFO"))
@@ -845,7 +846,7 @@ async def ai_missing(req: MissingReq):
     prompt = (f"Project goal: {goal}\nCurrent modules: {', '.join(names)}\nCompletion: {lv['completion']['pct']}%\n"
               f"Current blockers: {undone}\n\nWhat is missing to reach the goal? Give at most 6 concrete next tasks, most important first, "
               "as a numbered list, each one line.")
-    out = await ask_llm("research", prompt, "You are a pragmatic tech lead. Compare the project graph with its goal and propose next tasks.")
+    out = await ask_llm("fast", prompt, "You are a pragmatic tech lead. Compare the project graph with its goal and propose next tasks.")
     if "text" in out:
         await cache_put(p, key, out["text"])
         out["cached"] = False
@@ -859,6 +860,8 @@ RUNS = {}
 class TestReq(BaseModel):
     ai: bool = True               # include tests that use external services (LLMs, web, git)
     destructive: bool = False
+    approved: bool = False        # uploaded projects: the owner must approve the generated plan first
+    mutating: bool = False        # uploaded projects: also call POST/PUT/PATCH/DELETE routes (may change the project's data)
 
 
 def _public_run(run):
@@ -925,9 +928,13 @@ async def _run_suite(p, run, req):
     pid = p["id"]
     ctx = tester.Ctx(p["root"], ai=req.ai, destructive=req.destructive)
     try:
-        groups = {"static": suites_aim.static_tests(ctx), "smoke": suites_aim.smoke_tests(ctx), "contract": await suites_aim.contract_tests(ctx),
-                  "data": suites_aim.data_tests(ctx), "bus": suites_aim.bus_tests(ctx), "flows": suites_aim.flow_tests(ctx),
-                  "security": suites_aim.security_tests(ctx), "perf": suites_aim.perf_tests(ctx)}
+        aim = _is_aim(p)
+        if aim:
+            groups = {"static": suites_aim.static_tests(ctx), "smoke": suites_aim.smoke_tests(ctx), "contract": await suites_aim.contract_tests(ctx),
+                      "data": suites_aim.data_tests(ctx), "bus": suites_aim.bus_tests(ctx), "flows": suites_aim.flow_tests(ctx),
+                      "security": suites_aim.security_tests(ctx), "perf": suites_aim.perf_tests(ctx)}
+        else:
+            groups = await suites_generic.build(ctx, p["graph"], req.mutating)
         ui = tester.T("ui", "browser harness (clicks every button on the dashboard pages)", None)
         ui["status"], ui["detail"] = "skip", "runs in your browser: press 'Run UI tests' on this page"
         rs = tester.T("resilience", "stop-a-service drills", None)
@@ -935,7 +942,9 @@ async def _run_suite(p, run, req):
         placeholders = {"ui": [ui], "resilience": [rs]}
         layers = []
         for lid, name, desc in tester.LAYERS:
-            layers.append({"id": lid, "name": name, "desc": desc, "tests": groups.get(lid) or placeholders.get(lid, [])})
+            ts = groups.get(lid) or (placeholders.get(lid, []) if aim else [])
+            if ts:
+                layers.append({"id": lid, "name": name, "desc": desc, "tests": ts})
         run["layers"] = layers
         flat = [t for l in layers for t in l["tests"] if l["id"] not in ("ui", "links", "resilience")]
         run["total"] = len(flat)
@@ -947,15 +956,17 @@ async def _run_suite(p, run, req):
                 run["done"] += 1
         await tester.run_tests(flat, ctx, progress)
         run["current"] = "link proof"
-        try:
-            p = await mem("GET", f"/research/projects/{pid}")      # the scanner flow refreshed the graph during the run
-        except HTTPException:
-            pass
-        link_tests, link_cov = await _links_layer(p, ctx.t0)
-        next(l for l in layers if l["id"] == "links")["tests"] = link_tests
+        link_cov = None
+        if aim:
+            try:
+                p = await mem("GET", f"/research/projects/{pid}")      # the scanner flow refreshed the graph during the run
+            except HTTPException:
+                pass
+            link_tests, link_cov = await _links_layer(p, ctx.t0)
+            next(l for l in layers if l["id"] == "links")["tests"] = link_tests
         run["coverage"] = {"routes": {"tested": len(ctx.shared.get("routes_tested", ())), "total": len(ctx.shared.get("routes", ())),
                                       "pct": round(100 * len(ctx.shared.get("routes_tested", ())) / max(1, len(ctx.shared.get("routes", ()))))},
-                           "links": link_cov}
+                           **({"links": link_cov} if link_cov else {})}
         run["status"] = "done"
     except Exception as e:
         logger.exception("test run crashed")
@@ -984,7 +995,10 @@ async def _persist_run(p, pub):
 async def start_test(pid: str, req: TestReq):
     p = await mem("GET", f"/research/projects/{pid}")
     if not _is_aim(p):
-        raise HTTPException(400, "Automatic tests for uploaded projects are not built yet. AIM OS has the full suite.")
+        if p["kind"] != "scanned" or not p.get("root"):
+            raise HTTPException(400, "Only opened or cloned folders can be tested")
+        if not req.approved:
+            raise HTTPException(400, "Approve the generated test plan first (POST /projects/{id}/test/plan shows it)")
     if pid in RUNS and RUNS[pid].get("status") == "running":
         return {"run_id": RUNS[pid]["id"], "already_running": True}
     run = {"id": uuid_hex(), "project_id": pid, "status": "running", "started": time.time(), "finished": None, "done": 0, "total": 0,
@@ -997,6 +1011,32 @@ async def start_test(pid: str, req: TestReq):
 def uuid_hex():
     import uuid
     return uuid.uuid4().hex[:10]
+
+
+@app.post("/projects/{pid}/test/plan")
+async def test_plan(pid: str, mutating: bool = False):
+    """Shows exactly what the generated tests would do, without running any of them. The owner approves this before a run."""
+    p = await mem("GET", f"/research/projects/{pid}")
+    if _is_aim(p):
+        return {"aim": True, "note": "AIM OS has its own full suite; no approval step needed."}
+    if p["kind"] != "scanned" or not p.get("root"):
+        raise HTTPException(400, "Only opened or cloned folders can be tested")
+    ctx = tester.Ctx(p["root"])
+    groups = await suites_generic.build(ctx, p["graph"], mutating)
+    layers = []
+    for lid, name, desc in tester.LAYERS:
+        ts = groups.get(lid) or []
+        if ts:
+            layers.append({"id": lid, "name": name, "desc": desc, "tests": [{"name": t["name"], "kind": t.get("kind", "")} for t in ts]})
+    kinds = {}
+    for l in layers:
+        for t in l["tests"]:
+            kinds[t["kind"]] = kinds.get(t["kind"], 0) + 1
+    svcs = [x["name"] for x in suites_generic.services(p["graph"])]
+    return {"aim": False, "layers": layers, "kinds": kinds, "total": sum(kinds.values()), "services": svcs,
+            "notes": ["Nothing in the project is ever executed; static checks only read its files.",
+                      "Live checks only call services that are already running on a published port: " + (", ".join(svcs) if svcs else "none found in the scan (static checks only)"),
+                      "Default calls are read-only GETs." + (" Mutating calls are INCLUDED: they may change the project's data." if mutating else " Calls that could change data are excluded unless you opt in.")]}
 
 
 @app.get("/projects/{pid}/test")
@@ -1288,7 +1328,7 @@ async def understand(pid: str):
         ' "gaps": ["up to 6 concrete things missing or broken"],',
         ' "plan": [ up to 8 objects in the order to do them: {"task":"short imperative","why":"one sentence","effort":"hours/days"} ]}',
     ])
-    out = await ask_llm("research", prompt, "You are a pragmatic tech lead. Answer only with the requested JSON.")
+    out = await ask_llm("fast", prompt, "You are a pragmatic tech lead. Answer only with the requested JSON.")
     if out.get("rate_limited"):
         return {"rate_limited": True, "retry_after": out.get("retry_after", 30)}
     if "text" not in out:
@@ -1514,7 +1554,7 @@ async def ai_compare(req: NewReq):
     except Exception as e:
         grounded = False
         logger.info("compare without live search (%s)", type(e).__name__)
-        out = await ask_llm("research", prompt, "You are a senior technical advisor. Respond only with the requested JSON.")
+        out = await ask_llm("fast", prompt, "You are a senior technical advisor. Respond only with the requested JSON.")
         if out.get("rate_limited"):
             return out
         if "text" not in out:
@@ -1586,7 +1626,7 @@ async def ai_novelty(req: NoveltyReq):
         text, sources, how = await search_grounded(prompt, [f"{subj_q} existing products alternatives competitors", f"apps similar to {subj_q}"])
     except Exception:
         grounded = False
-        out = await ask_llm("research", prompt, "You are a product strategist. Answer only with the requested JSON.")
+        out = await ask_llm("fast", prompt, "You are a product strategist. Answer only with the requested JSON.")
         if out.get("rate_limited"):
             return out
         if "text" not in out:
@@ -1602,6 +1642,19 @@ async def ai_novelty(req: NoveltyReq):
                "unique_angle": str(d.get("unique_angle", "")), "sources": sources, "grounded": grounded, "search": how}
     except Exception:
         return {"error": "The model's answer could not be read. Try again."}
+    if how == "tavily" and not res["existing"]:     # the model sometimes forgets to list products even though the search results name them: ask once more
+        try:
+            t2, s2, _ = await search_grounded(prompt + nl + "Your previous answer listed no existing products, but the search results mention some. Name at least 3 real ones in `existing`.",
+                                              [f"{subj_q} existing products alternatives competitors", f"apps similar to {subj_q}"])
+            d2 = _extract_json(t2)
+            ex = [{"name": str(x.get("name", ""))[:60], "what": str(x.get("what", ""))[:160], "similarity": _clamp(x.get("similarity"), 0, 100, 50), "gap": str(x.get("gap", ""))[:200]}
+                  for x in (d2.get("existing") or []) if isinstance(x, dict) and x.get("name")][:5]
+            if ex:
+                res["existing"] = ex
+                if d2.get("verdict") in ("crowded", "niche", "open"):
+                    res["verdict"] = d2["verdict"]
+        except Exception:
+            pass
     NOVELTY_CACHE[key] = res
     if p:
         g = p["graph"]; g["novelty"] = res
@@ -1651,7 +1704,7 @@ async def gemini_search(query: str, context: Optional[str] = None) -> dict:
 
 
 async def fallback_research(query: str, context: Optional[str]) -> dict:
-    out = await ask_llm("research", f"Research this topic: {query}\n\nContext: {context or 'none'}",
+    out = await ask_llm("fast", f"Research this topic: {query}\n\nContext: {context or 'none'}",
                         "You are a research assistant. Respond ONLY in JSON with summary, key_points array, and sources array.")
     if "text" in out:
         try:
