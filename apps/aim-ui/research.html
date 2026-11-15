@@ -981,6 +981,7 @@ async function harnessPage(page, tests, cov) {
           catch (e) { cov.clicked++; add(`link "${name}" -> ${h}`, 'fail', 'unreachable'); }
           continue;
         }
+        if (el.closest('#mods, #tasks, #blk, .pill, .task')) { cov.skipped++; add(`progress control "${name}"`, 'skip', 'not clicked: it changes the completion state (covered by API tests)'); continue; }
         if (DANGER.test(name) || DANGER.test(el.id || '') || DANGER.test(el.getAttribute('onclick') || '') || el.dataset.del) { cov.skipped++; add(`button "${name}"`, 'skip', 'not clicked on purpose: it changes data, uses AI quota or needs the microphone (covered by API and flow tests)'); continue; }
         marker = (w.__err || []).length;
         try {
