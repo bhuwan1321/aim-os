@@ -381,7 +381,7 @@ header::before{
   <div class="arc-corners">
     <div class="ac tl">LLM ROUTER<span id="llm-val">GROQ · 70B</span></div>
     <div class="ac tr">CPU / RAM<span id="sysstat-val">-- / --</span></div>
-    <div class="ac bl">ACTIVE APP<span id="activeapp-val">--</span></div>
+    <div class="ac bl">BRIDGE<span id="activeapp-val">--</span></div>
     <div class="ac br">VRAM FREE<span id="vram-val">2.4 GB</span></div>
   </div>
 
@@ -602,51 +602,6 @@ header::before{
       <button onclick="runMemoryDecay()" style="background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:8px;padding:4px 10px;cursor:pointer;letter-spacing:1px;">RUN DECAY</button>
       <button onclick="exportMemories()" style="background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:8px;padding:4px 10px;cursor:pointer;letter-spacing:1px;">EXPORT JSON</button>
       <div style="margin-left:auto;font-size:8px;color:var(--txm);letter-spacing:1px;" id="memStatus">READY</div>
-    </div>
-  </div>
-</div>
-<!-- ══ UNKNOWN APP MODAL ══ -->
-<div id="unknownAppModal" style="display:none;position:fixed;bottom:80px;right:12px;width:340px;z-index:997;background:var(--bg2);border:1px solid var(--bords);pointer-events:all;">
-  <div class="cb tl"></div><div class="cb tr"></div>
-  <div class="cb bl"></div><div class="cb br"></div>
-  <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--c),transparent);opacity:.8;"></div>
-  <div style="padding:10px 14px;border-bottom:1px solid var(--bord);background:var(--bg3);display:flex;align-items:center;gap:8px;">
-    <span style="font-size:8px;padding:1px 8px;border:1px solid var(--amber);color:var(--amber);letter-spacing:1px;">UNKNOWN APP</span>
-    <span style="font-size:9px;color:var(--txd);" id="unknownAppTitle">Unknown</span>
-    <button onclick="dismissUnknownApp()" style="margin-left:auto;background:transparent;border:none;color:var(--txm);cursor:pointer;font-size:11px;">✕</button>
-  </div>
-  <div style="padding:12px 14px;">
-    <div style="font-size:11px;color:var(--txd);margin-bottom:10px;line-height:1.5;">
-      AIM detected a new app. Help me learn it:
-    </div>
-    <div style="display:flex;flex-direction:column;gap:7px;">
-      <input id="learnAppName" type="text" placeholder="App name (e.g. Figma)"
-        style="background:var(--bg3);border:1px solid var(--bord);color:var(--tx);font-family:'Share Tech Mono',monospace;font-size:11px;padding:6px 10px;outline:none;width:100%;"
-        onfocus="this.style.borderColor='var(--c)'" onblur="this.style.borderColor='var(--bord)'"/>
-      <input id="learnAppPurpose" type="text" placeholder="Why you use it (e.g. UI design)"
-        style="background:var(--bg3);border:1px solid var(--bord);color:var(--tx);font-family:'Share Tech Mono',monospace;font-size:11px;padding:6px 10px;outline:none;width:100%;"
-        onfocus="this.style.borderColor='var(--c)'" onblur="this.style.borderColor='var(--bord)'"/>
-      <select id="learnAppCategory"
-        style="background:var(--bg3);border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:10px;padding:6px 10px;outline:none;width:100%;">
-        <option value="work">WORK</option>
-        <option value="dev">DEVELOPMENT</option>
-        <option value="design">DESIGN</option>
-        <option value="research">RESEARCH</option>
-        <option value="communication">COMMUNICATION</option>
-        <option value="entertainment">ENTERTAINMENT</option>
-        <option value="productivity">PRODUCTIVITY</option>
-        <option value="system">SYSTEM</option>
-      </select>
-      <div style="display:flex;gap:6px;margin-top:2px;">
-        <button onclick="submitLearnApp()"
-          style="flex:1;background:var(--cg);border:1px solid var(--c);color:var(--c);font-family:'Share Tech Mono',monospace;font-size:9px;padding:7px;cursor:pointer;letter-spacing:2px;">
-          TEACH AIM
-        </button>
-        <button onclick="dismissUnknownApp()"
-          style="background:transparent;border:1px solid var(--bord);color:var(--txd);font-family:'Share Tech Mono',monospace;font-size:9px;padding:7px 12px;cursor:pointer;letter-spacing:1px;">
-          SKIP
-        </button>
-      </div>
     </div>
   </div>
 </div>
@@ -927,135 +882,17 @@ async function fetchLiveData() {
 const BRIDGE = 'http://localhost:9999';
 
 
-// ── UNKNOWN APP LEARNING ──────────────────────
-let currentUnknownApp = null;
-
-function showUnknownAppPrompt(windowInfo) {
-  if (currentUnknownApp) return; // already showing one
-  currentUnknownApp = windowInfo;
-  document.getElementById('unknownAppTitle').textContent =
-    (windowInfo.raw_title || windowInfo.title || 'Unknown').slice(0, 40);
-  document.getElementById('learnAppName').value = windowInfo.app || '';
-  document.getElementById('learnAppPurpose').value = '';
-  document.getElementById('unknownAppModal').style.display = 'block';
-}
-
-function dismissUnknownApp() {
-  document.getElementById('unknownAppModal').style.display = 'none';
-  currentUnknownApp = null;
-}
-
-async function submitLearnApp() {
-  const name     = document.getElementById('learnAppName').value.trim();
-  const purpose  = document.getElementById('learnAppPurpose').value.trim();
-  const category = document.getElementById('learnAppCategory').value;
-
-  if (!name) {
-    document.getElementById('learnAppName').style.borderColor = 'var(--red)';
-    return;
-  }
-
-  const titleKey = currentUnknownApp?.title_key || '';
-
-  // Show loading state
-  const btn = document.querySelector('#unknownAppModal button[onclick="submitLearnApp()"]');
-  if (btn) { btn.textContent = 'TEACHING...'; btn.disabled = true; }
-
-  try {
-    // Teach host bridge using no-cors mode to avoid preflight
-    await fetch(`${BRIDGE}/learn-app`, {
-      method:  'POST',
-      headers: {'Content-Type': 'application/json'},
-      body:    JSON.stringify({title_key: titleKey, name, purpose, category})
-    });
-  } catch(e) {
-    console.warn('Bridge learn error (may still have worked):', e.message);
-  }
-
-  try {
-    // Store in AIM memory
-    await fetch(`${API.memory}/memories`, {
-      method:  'POST',
-      headers: {'Content-Type': 'application/json'},
-      body:    JSON.stringify({
-        content:    `App learned: ${name} — ${purpose} (category: ${category})`,
-        source:     'app-learning',
-        importance: 0.85,
-        confidence: 1.0,
-        tags:       ['app', 'learned', category],
-        tier:       'long'
-      })
-    });
-  } catch(e) {
-    console.warn('Memory store error:', e.message);
-  }
-
-  try {
-    // Log to timeline
-    await fetch(`${API.timeline}/events`, {
-      method:  'POST',
-      headers: {'Content-Type': 'application/json'},
-      body:    JSON.stringify({
-        event_type:  'app.learned',
-        description: `Learned: ${name} — ${purpose}`,
-        app:          name.toLowerCase(),
-        focus_score:  0.7
-      })
-    });
-  } catch(e) {
-    console.warn('Timeline error:', e.message);
-  }
-
-  // Always show success and close
-  showNotification({
-    title:      'AIM Learned',
-    message:    `Got it — ${name} is for ${purpose || category}. I will remember this.`,
-    priority:   'normal',
-    confidence: 1.0,
-    source:     'app-learning'
-  });
-
-  dismissUnknownApp();
-}
-// Check for unknown apps in bridge poll
-const _origPollBridge = pollHostBridge;
+// ── HOST STATS (CPU / RAM from the host bridge) ──
 async function pollHostBridge() {
   try {
-    const winRes = await fetch(`${BRIDGE}/active-window`,
-      {signal: AbortSignal.timeout(2000)});
-    if (winRes.ok) {
-      const win = await winRes.json();
-      document.getElementById('activeapp-val').textContent =
-        (win.app || 'unknown').toUpperCase().slice(0, 12);
-
-      // Unknown app detected — ask user
-      // Unknown app — AIM is auto-researching it
-      if (!win.known && win.should_ask) {
-        showNotification({
-          title:      'AIM Researching',
-          message:    `Identifying unknown app: ${win.raw_title?.slice(0,40) || win.app}...`,
-          priority:   'low',
-          confidence: 0.5,
-          source:     'auto-research'
-        });
-      }
-
-      // Show purpose if learned
-      if (win.learned && win.purpose) {
-        document.getElementById('llm-val').textContent =
-          win.purpose.slice(0, 14).toUpperCase();
-      }
-    }
-
-    const sysRes = await fetch(`${BRIDGE}/system-stats`,
-      {signal: AbortSignal.timeout(2000)});
+    const sysRes = await fetch(`${BRIDGE}/system-stats`, {signal: AbortSignal.timeout(2000)});
     if (sysRes.ok) {
       const sys = await sysRes.json();
-      document.getElementById('sysstat-val').textContent =
-        `${sys.cpu_percent?.toFixed(0)||'--'}% / ${sys.ram_percent?.toFixed(0)||'--'}%`;
+      document.getElementById('sysstat-val').textContent = `${sys.cpu_percent?.toFixed(0)||'--'}% / ${sys.ram_percent?.toFixed(0)||'--'}%`;
+      document.getElementById('activeapp-val').textContent = 'ON';
     }
   } catch(e) {
-    document.getElementById('activeapp-val').textContent = 'BRIDGE OFF';
+    document.getElementById('activeapp-val').textContent = 'OFF';
   }
 }
 // Poll every 5 seconds

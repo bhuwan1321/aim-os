@@ -1,5 +1,4 @@
 # files the scanner should ignore (disabled components)
-agents/screen/main.py
 agents/research/suites_aim.py
 agents/research/tester.py
 tests

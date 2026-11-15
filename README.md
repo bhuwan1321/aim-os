@@ -45,7 +45,7 @@ Delete this folder (after `clean`) and nothing is left behind.
 | 8007 | Browser Agent | headless Chromium: `POST /browse {"url": ...}` |
 | 8008 | Voice Agent | Baymax voice: `/speak`, `/transcribe`, `/converse` |
 | 11434 | Ollama | local models |
-| 9999 | Host Bridge | runs on your OS (active window, screenshots, stats) |
+| 9999 | Host Bridge | runs on your OS: CPU / RAM / disk readout only |
 
 API keys are optional: put `GROQ_API_KEY` / `GOOGLE_API_KEY` in `.env`. Without them everything runs on
 the local models.
@@ -59,10 +59,8 @@ voice with `VOICE_MODEL` in `.env` (any Piper voice name, e.g. `en_US-lessac-med
 
 ## Host bridge and privacy
 
-The bridge is the only thing running outside Docker. `/screenshot` and `/context` require the secret
-`AIM_BRIDGE_TOKEN` from `.env`. On macOS grant your terminal *Screen Recording* and *Accessibility*
-permission for screenshots and window titles; on Linux install `xdotool` for window titles
-(X11). Never share `.env`.
+The bridge is the only thing running outside Docker. It listens on localhost only and reports CPU, RAM and disk
+usage to the dashboard. AIM does **not** take screenshots, read window titles or list your processes.
 
 ## Project scanner
 

@@ -171,8 +171,8 @@ def bridge_start(env):
         kw["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | NEW_PROCESS_GROUP
     else:
         kw["start_new_session"] = True
-    p = subprocess.Popen([VPY, os.path.join("agents", "screen", "host_bridge.py")], stdout=log, stderr=log,
-                         env=dict(os.environ, AIM_BRIDGE_TOKEN=env.get("AIM_BRIDGE_TOKEN", "")), **kw)
+    p = subprocess.Popen([VPY, os.path.join("tools", "host_bridge.py")], stdout=log, stderr=log,
+                         env=dict(os.environ), **kw)
     open(PIDFILE, "w").write(str(p.pid))
 
 
@@ -202,7 +202,7 @@ def cmd_start(a):
     try:
         bridge_start(env)
     except Exception as e:
-        say(f"  ! Host bridge could not start ({e}). AIM still works; screen awareness is off.")
+        say(f"  ! Host bridge could not start ({e}). AIM still works; the CPU/RAM readout is off.")
     say("  [3/3] Waiting for services...")
     deadline = time.time() + 180
     while time.time() < deadline and not http_ok(UI_URL):

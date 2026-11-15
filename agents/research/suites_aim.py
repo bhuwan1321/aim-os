@@ -499,13 +499,13 @@ def bus_tests(ctx):
 
     async def brain_bus(ctx):
         ctx.cleanups.append(lambda: purge_test_rows(ctx))
-        await pub("aim.ide.file_open", {"file": f"{MARK}_file.py", "app": MARK, "project": None})
+        await pub("aim.browser.tab", {"url": "http://aimtest.example/page", "title": f"{MARK} page", "app": "browser", "summary": f"{MARK} browsing event"})
 
         async def seen():
-            r = await ctx.call("GET", U("timeline", "/events?event_type=ide.file_open&limit=10"))
+            r = await ctx.call("GET", U("timeline", "/events?event_type=browser.tab&limit=10"))
             return any(MARK in json.dumps(e) for e in r.json()) if r.status == 200 else False
-        check(await until(seen, 60, 2), "brain never turned an IDE event into a timeline event within 60 s", "timeline event", "none")
-    out.append(T("bus", "brain: an IDE event is classified by the LLM and logged to the timeline", brain_bus, ai=True, timeout=90))
+        check(await until(seen, 60, 2), "brain never turned a browser-tab event into a timeline event within 60 s", "timeline event", "none")
+    out.append(T("bus", "brain: a browsing event is classified by the LLM and logged to the timeline", brain_bus, ai=True, timeout=90))
 
     async def research_bus(ctx):
         if not await cloud_ai(ctx):
@@ -572,6 +572,22 @@ def flow_tests(ctx):
         check(d.get("summary"), "no summary produced", "summary", d.get("summary"))
         check(d.get("memory_id"), "page was not stored in memory", "memory id", d.get("memory_id"))
     out.append(T("flows", "browser agent: browse -> LLM summary -> stored in memory", browse_sum, ai=True, timeout=200))
+
+    async def browse_announces(ctx):
+        ctx.cleanups.append(lambda: purge_test_rows(ctx))
+        r = rclient(); ps = r.pubsub()
+        try:
+            await ps.subscribe("aim.browser.tab"); await ps.get_message(timeout=1)
+            b = await ctx.call("POST", U("browser-agent", "/browse"), json={"url": "http://dashboard:8888/timer.html", "summarize": False, "store": True}, timeout=60)
+            check(b.status == 200, f"browse returned {b.status}")
+            if b.json().get("memory_id"):
+                track_memory(ctx, b.json()["memory_id"])
+            m = await until(lambda: ps.get_message(ignore_subscribe_messages=True, timeout=1), 8)
+            check(m, "browser agent did not publish aim.browser.tab after browsing", "an event", "silence")
+            check("timer.html" in json.loads(m["data"])["url"], "event carries the wrong URL")
+        finally:
+            await ps.aclose(); await r.aclose()
+    out.append(T("flows", "browser agent: every stored browse is announced on aim.browser.tab", browse_announces, timeout=90))
 
     async def router_fast(ctx):
         r = await ctx.call("POST", U("llm-router", "/route"), json={"task": "fast", "prompt": "Reply with exactly the single word: PONG"}, timeout=90)
@@ -717,13 +733,13 @@ def flow_tests(ctx):
 def security_tests(ctx):
     out = []
 
-    async def bridge_auth(ctx):
-        for path in ("/screenshot", "/context"):
+    async def bridge_gone(ctx):
+        for path in ("/screenshot", "/context", "/active-window", "/processes"):
             r = await ctx.call("GET", BRIDGE + path)
-            check(r.status == 401, f"host bridge {path} answered {r.status} without a token", 401, r.status)
-            r = await ctx.call("GET", BRIDGE + path, headers={"X-AIM-Token": "wrong-token"})
-            check(r.status == 401, f"host bridge {path} accepted a wrong token ({r.status})", 401, r.status)
-    out.append(T("security", "host bridge: /screenshot and /context reject missing and wrong tokens", bridge_auth))
+            check(r.status == 404, f"host bridge still answers {path} ({r.status}): screen capture must not exist", 404, r.status)
+        r = await ctx.call("GET", BRIDGE + "/system-stats", headers={"Origin": "https://evil.example"})
+        check(r.headers.get("access-control-allow-origin") != "*", "host bridge allows every website to read it (CORS *)", "http://localhost:8888", r.headers.get("access-control-allow-origin"))
+    out.append(T("security", "host bridge: no screenshots, window titles or process lists exist; CORS is dashboard-only", bridge_gone))
 
     async def leak(ctx):
         vals = {v: os.getenv(v) for v in SECRET_VARS if len(os.getenv(v) or "") >= 8}

@@ -76,6 +76,20 @@ async def shutdown():
         await _pw["p"].stop()
 
 
+async def _announce_tab(out):
+    """Tell the rest of AIM what was browsed (the brain logs it to the timeline)."""
+    try:
+        import json as _j, os as _o
+        import redis.asyncio as _r
+        c = _r.Redis(host=_o.getenv("REDIS_HOST", "redis"), port=int(_o.getenv("REDIS_PORT", 6379)), password=_o.getenv("REDIS_PASSWORD"), decode_responses=True)
+        try:
+            await c.publish("aim.browser.tab", _j.dumps({"url": out["url"], "title": out["title"], "app": "browser", "summary": (out["summary"] or out["text"])[:300]}))
+        finally:
+            await c.aclose()
+    except Exception as e:
+        log.warning("could not announce tab: %s", e)
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "browser-agent", "browser": _pw["browser"] is not None}
@@ -123,4 +137,6 @@ async def browse(req: BrowseReq):
                 out["memory_id"] = r.json().get("id")
         except Exception as e:
             log.warning("store failed: %s", e)
+    if req.store and (out["summary"] or text):
+        await _announce_tab(out)
     return out

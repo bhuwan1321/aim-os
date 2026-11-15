@@ -157,8 +157,6 @@ async def listen_events():
     await asyncio.sleep(2)  # wait for redis ready
     pubsub = redis_client.pubsub()
     await pubsub.subscribe(
-        "aim.ide.file_open",
-        "aim.terminal.cmd",
         "aim.browser.tab"
     )
     logger.info("Brain listening to event bus...")
