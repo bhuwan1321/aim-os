@@ -698,6 +698,114 @@ def flow_tests(ctx):
         ctx.note(f"{len(r.json()['results'])} results, first: {res['url'][:50]}")
     out.append(T("flows", "live web search: Tavily returns real results (uses 1 free credit)", web_search_flow, ai=True, timeout=60))
 
+    async def editor_safety(ctx):
+        import shutil
+        base = "/projects/workspace/aimtest-edit"
+        os.makedirs(base + "/src", exist_ok=True)
+        open(base + "/src/app.py", "w").write('print("hello")\n')
+        open(base + "/.env", "w").write("SECRET=1\n")
+        async def _rm():
+            shutil.rmtree(base, ignore_errors=True)
+        ctx.cleanups.append(_rm)
+        o = await ctx.call("POST", U("research-agent", "/projects/open"), json={"path": base, "name": "aimtest-edit"}, timeout=60)
+        check(o.status == 200, f"open fixture returned {o.status}")
+        pid = o.json()["id"]
+        ctx.cleanups.append(lambda: ctx.call("DELETE", U("research-agent", f"/projects/{pid}")))
+        A = "research-agent"
+        r = await ctx.call("GET", U(A, f"/projects/{pid}/file?path=src/app.py"))
+        check(r.status == 200 and "hello" in r.json()["content"], "could not read a file in the project", 200, r.status)
+        w = await ctx.call("PUT", U(A, f"/projects/{pid}/file"), json={"path": "src/app.py", "content": 'print("edited")\n'})
+        check(w.status == 200 and "edited" in open(base + "/src/app.py").read(), "saved content did not reach the disk")
+        n1 = await ctx.call("POST", U(A, f"/projects/{pid}/file/new"), json={"path": "docs/n.md", "content": "x"})
+        n2 = await ctx.call("POST", U(A, f"/projects/{pid}/file/new"), json={"path": "docs/n.md"})
+        check(n1.status == 200 and n2.status == 409, f"create/duplicate gave {n1.status}/{n2.status}", "200/409", f"{n1.status}/{n2.status}")
+        d = await ctx.call("DELETE", U(A, f"/projects/{pid}/file?path=docs/n.md"))
+        check(d.status == 200 and not os.path.exists(base + "/docs/n.md"), "file not deleted")
+        for bad in ("../../../etc/passwd", "..", "/etc/passwd"):
+            t = await ctx.call("GET", U(A, f"/projects/{pid}/file"), params={"path": bad})
+            check(t.status in (400, 403, 404), f"path traversal {bad!r} not refused ({t.status})", "400/403", t.status)
+        e = await ctx.call("GET", U(A, f"/projects/{pid}/file?path=.env"))
+        check(e.status == 403, f"a .env file was served ({e.status})", 403, e.status)
+        tr = await ctx.call("GET", U(A, f"/projects/{pid}/tree"))
+        check(".env" not in [i["name"] for i in tr.json()["items"]], ".env is listed in the file tree")
+    out.append(T("security", "file editor: edits reach disk; traversal and .env files are refused", editor_safety, timeout=90))
+
+    async def editor_readonly(ctx):
+        a = (await ctx.call("GET", U("research-agent", "/projects"))).json()
+        aim = next((p["id"] for p in a if p["name"] == "AIM OS"), None)
+        if not aim:
+            raise TestSkip("AIM OS project not found")
+        w = await ctx.call("PUT", U("research-agent", f"/projects/{aim}/file"), json={"path": "README.md", "content": "x"})
+        check(w.status == 403, f"AIM OS's own source can be overwritten from the UI ({w.status})", 403, w.status)
+        for secret in (".env", ".env.backup-before-transfer"):
+            r = await ctx.call("GET", U("research-agent", f"/projects/{aim}/file"), params={"path": secret})
+            check(r.status == 403, f"{secret} is readable through the editor ({r.status})", 403, r.status)
+    out.append(T("security", "editor: AIM OS source is read-only and its .env files can never be read", editor_readonly))
+
+    async def dash_summary(ctx):
+        r = await ctx.call("GET", U("research-agent", "/dashboard/summary"), timeout=40)
+        check(r.status == 200, f"dashboard summary returned {r.status}")
+        ps = r.json()["projects"]
+        check(ps, "no projects in the summary")
+        for p in ps:
+            for k in ("id", "name", "kind", "pct", "services", "links", "tasks", "blockers"):
+                check(k in p, f"summary for {p.get('name')} lacks {k}")
+            check(0 <= p["pct"] <= 100, f"completion {p['pct']} out of range")
+        ctx.note(f"{len(ps)} project(s), first: {ps[0]['name']} at {ps[0]['pct']}%")
+    out.append(T("flows", "dashboard summary: every project has live completion, services, links and tasks", dash_summary))
+
+    async def tasks_api(ctx):
+        A = "research-agent"
+        r = await ctx.call("POST", U(A, "/projects/new"), json={"name": f"{MARK} tasks", "type": "cli", "idea": ""})
+        pid = r.json()["id"]
+        ctx.cleanups.append(lambda: ctx.call("DELETE", U(A, f"/projects/{pid}")))
+        put = await ctx.call("PUT", U(A, f"/projects/{pid}/tasks"), json={"tasks": [{"id": "a", "label": "manual one"}, {"id": "b", "label": "auto search", "auto": "tavily_key"}, {"id": "c", "label": "   "}, {"id": "d", "label": "x", "auto": "bogus"}]})
+        check(put.status == 200, f"put tasks {put.status}")
+        ts = put.json()["tasks"]
+        check([t["id"] for t in ts] == ["a", "b", "d"], f"blank task kept or ids wrong: {[t['id'] for t in ts]}")
+        check("auto" not in ts[2], "an unknown auto rule was accepted")
+        await ctx.call("POST", U(A, f"/projects/{pid}/override"), json={"key": "task:a", "value": True})
+        await asyncio.sleep(2.2)
+        lv = (await ctx.call("GET", U(A, f"/projects/{pid}/live"))).json()["completion"]["tasks"]
+        by = {t["id"]: t for t in lv}
+        check(by["task:a"]["done"] is True, "manual task tick not reflected")
+        check(by["task:b"]["auto"] is True, "auto flag missing on the auto task")
+        pa = await ctx.call("PATCH", U(A, f"/projects/{pid}"), json={"name": f"{MARK} renamed", "motive": f"{MARK} why"})
+        check(pa.status == 200 and pa.json()["name"] == f"{MARK} renamed" and pa.json()["graph"]["motive"] == f"{MARK} why", "project patch did not persist")
+    out.append(T("flows", "tasks: edit list, auto rules validated, manual tick shows, rename + motive persist", tasks_api, timeout=60))
+
+    async def generic_gate(ctx):
+        import shutil
+        base = "/projects/workspace/aimtest-gen"
+        os.makedirs(base, exist_ok=True)
+        open(base + "/ok.py", "w").write("def f():\n    return 1\n")
+        open(base + "/broken.py", "w").write("def f(:\n")
+        async def _rm():
+            shutil.rmtree(base, ignore_errors=True)
+        ctx.cleanups.append(_rm)
+        A = "research-agent"
+        o = await ctx.call("POST", U(A, "/projects/open"), json={"path": base, "name": "aimtest-gen"}, timeout=60)
+        pid = o.json()["id"]
+        ctx.cleanups.append(lambda: ctx.call("DELETE", U(A, f"/projects/{pid}")))
+        no = await ctx.call("POST", U(A, f"/projects/{pid}/test"), json={"ai": False})
+        check(no.status == 400, f"an uploaded project was tested without approval ({no.status})", 400, no.status)
+        pl = await ctx.call("POST", U(A, f"/projects/{pid}/test/plan"), timeout=60)
+        check(pl.status == 200 and pl.json()["total"] >= 3 and not pl.json()["aim"], "plan missing")
+        kinds = pl.json()["kinds"]
+        check(not any("changes data" in k for k in kinds), "the default plan includes data-changing calls", "none", kinds)
+        go = await ctx.call("POST", U(A, f"/projects/{pid}/test"), json={"ai": False, "approved": True})
+        check(go.status == 200, f"approved run returned {go.status}")
+
+        async def done():
+            s = (await ctx.call("GET", U(A, f"/projects/{pid}/test"))).json()
+            return s if s.get("status") not in ("running", None) else None
+        res = await until(done, 60, 1.5)
+        check(res, "generated tests did not finish")
+        bad = [t for l in res["layers"] for t in l["tests"] if t["status"] == "fail"]
+        check(any("broken.py" in t["name"] for t in bad), "the generated tests did not catch the syntax error in broken.py", "broken.py fails", [t["name"] for t in bad])
+        ctx.note(f"{res['summary']['pass']} pass, {res['summary']['fail']} fail (the planted syntax error was caught)")
+    out.append(T("flows", "uploaded projects: plan must be approved, read-only by default, planted bug is caught", generic_gate, timeout=120))
+
     async def think_compare(ctx):
         r = await ctx.call("POST", U("research-agent", "/ai/think"), json={"name": MARK, "type": "app", "messages": [{"role": "user", "content": f"{MARK} I want a tiny todo app because I forget things"}]}, timeout=90)
         d = r.json()
