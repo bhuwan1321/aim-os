@@ -685,6 +685,19 @@ def flow_tests(ctx):
         check(len(d["summary"]) > 40 and d["key_points"], "research result is empty", "summary + key points", d["summary"][:60])
     out.append(T("flows", "research: web question -> structured answer stored in memory", web_research, ai=True, timeout=150))
 
+    async def web_search_flow(ctx):
+        st = (await ctx.call("GET", U("research-agent", "/search/status"))).json()
+        if not st["tavily"]:
+            raise TestWarn("TAVILY_API_KEY is not set in .env - add it and run: python aim.py start", "Tavily search configured", "not configured")
+        r = await ctx.call("POST", U("research-agent", "/search"), json={"query": "redis pubsub numsub command", "n": 3}, timeout=40)
+        if r.status == 503:
+            raise TestWarn(f"Tavily unavailable: {r.text[:120]}")
+        check(r.status == 200 and r.json()["results"], f"search returned {r.status}: {r.text[:100]}", ">= 1 result", r.text[:80])
+        res = r.json()["results"][0]
+        check(res["url"].startswith("http") and res["content"], "result has no url or content")
+        ctx.note(f"{len(r.json()['results'])} results, first: {res['url'][:50]}")
+    out.append(T("flows", "live web search: Tavily returns real results (uses 1 free credit)", web_search_flow, ai=True, timeout=60))
+
     async def think_compare(ctx):
         r = await ctx.call("POST", U("research-agent", "/ai/think"), json={"name": MARK, "type": "app", "messages": [{"role": "user", "content": f"{MARK} I want a tiny todo app because I forget things"}]}, timeout=90)
         d = r.json()

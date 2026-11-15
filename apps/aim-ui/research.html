@@ -179,7 +179,8 @@ svg#g:active{cursor:grabbing}
     <a href="index.html">&larr; JARVIS</a>
     <span class="sp"></span>
     <span class="rl" id="rl">RATE LIMITED - AI paused <span id="rlt"></span></span>
-    <span class="live"><span class="dot" id="sse"></span><span id="ssetx">connecting</span></span>
+    <span class="live" title="Live web search used by research, comparison and novelty"><span class="dot" id="srdot"></span><span id="srtx">search: ...</span></span>
+        <span class="live"><span class="dot" id="sse"></span><span id="ssetx">connecting</span></span>
   </header>
 
   <aside>
@@ -1057,6 +1058,7 @@ $('#rq').addEventListener('keydown', async e => {
   catch (err) { out.textContent = err.message; }
 });
 window.addEventListener('resize', () => { if (P) fit(); });
+(async () => { try { const s = await api('/search/status'); $('#srdot').classList.toggle('on', s.tavily && !s.paused); $('#srtx').textContent = s.tavily ? (s.paused ? 'search: Tavily paused' : 'search: Tavily') : (s.gemini_search_paused ? 'search: off (add TAVILY_API_KEY)' : 'search: Gemini'); } catch (e) { $('#srtx').textContent = 'search: ?'; } })();
 loadProjects();
 </script>
 </body>

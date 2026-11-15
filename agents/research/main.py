@@ -1137,6 +1137,91 @@ async def ai_think(req: ThinkReq):
         return {"reply": out["text"].strip()[:900], "motive": None, "idea": "", "ready": False}
 
 
+# ═════════════════════════ live web search: Tavily (free tier) -> free LLM writes the answer; Gemini search is the fallback ═════════════════════════
+TAVILY_KEY = os.getenv("TAVILY_API_KEY")
+TAVILY_URL = os.getenv("TAVILY_API_URL", "https://api.tavily.com/search")
+TAV_UNTIL = 0.0
+SEARCH_CACHE = {}          # query -> (ts, results): repeats cost no credits
+
+
+class SearchUnavailable(Exception):
+    pass
+
+
+async def web_search(query: str, n: int = 6, depth: str = "basic"):
+    """Tavily search -> [{title, url, content}]. Raises SearchUnavailable when there is no key, the plan limit is hit or the key is rejected."""
+    global TAV_UNTIL
+    if not TAVILY_KEY:
+        raise SearchUnavailable("TAVILY_API_KEY is not set")
+    if time.time() < TAV_UNTIL:
+        raise SearchUnavailable("Tavily paused after a limit or auth error")
+    q = " ".join(query.split())[:380]
+    hit = SEARCH_CACHE.get((q, n, depth))
+    if hit and time.time() - hit[0] < 3600:
+        return hit[1]
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.post(TAVILY_URL, headers={"Authorization": f"Bearer {TAVILY_KEY}"},
+                             json={"query": q, "search_depth": depth, "max_results": n, "include_answer": False})
+    except httpx.HTTPError as e:
+        raise SearchUnavailable(f"Tavily unreachable ({type(e).__name__})")
+    if r.status_code in (429, 432, 433):
+        TAV_UNTIL = time.time() + 900
+        raise SearchUnavailable("Tavily limit reached (monthly credits or rate limit)")
+    if r.status_code in (401, 403):
+        TAV_UNTIL = time.time() + 3600
+        raise SearchUnavailable("Tavily rejected the API key")
+    r.raise_for_status()
+    res = [{"title": x.get("title", ""), "url": x.get("url", ""), "content": (x.get("content") or "")[:700]} for x in r.json().get("results", [])][:n]
+    SEARCH_CACHE[(q, n, depth)] = (time.time(), res)
+    return res
+
+
+async def search_grounded(prompt: str, queries):
+    """Answer `prompt` using live web results. -> (text, source_urls, how) with how in {'tavily','gemini'}.
+    Order: Tavily results + a free LLM (Groq) writing the answer; then Gemini's built-in search. Raises when neither is available."""
+    if TAVILY_KEY and time.time() >= TAV_UNTIL:
+        try:
+            batches = await asyncio.gather(*[web_search(q) for q in queries[:3]])
+            seen, results = set(), []
+            for b in batches:
+                for x in b:
+                    if x["url"] not in seen:
+                        seen.add(x["url"]); results.append(x)
+            results = results[:10]
+            if results:
+                nl = chr(10)
+                ctx = (nl + nl).join(f"[{i + 1}] {x['title']} ({x['url']}){nl}{x['content']}" for i, x in enumerate(results))
+                full = prompt + nl + nl + "LIVE WEB SEARCH RESULTS (prefer these facts over memory; do not invent products or numbers that are not supported here):" + nl + ctx
+                out = await ask_llm("fast", full, "You are a careful research analyst. Ground every claim in the search results. Answer only in the requested format.")
+                if "text" in out:
+                    return out["text"], [x["url"] for x in results], "tavily"
+        except SearchUnavailable as e:
+            logger.info("web search skipped: %s", e)
+        except httpx.HTTPError:
+            pass
+    text, sources = await gemini_grounded(prompt)        # raises GroundingUnavailable when its quota is used up too
+    return text, sources, "gemini"
+
+
+@app.get("/search/status")
+async def search_status():
+    return {"tavily": bool(TAVILY_KEY), "paused": time.time() < TAV_UNTIL, "gemini_search_paused": time.time() < GROUND_UNTIL}
+
+
+class SearchReq(BaseModel):
+    query: str
+    n: int = 6
+
+
+@app.post("/search")
+async def search_endpoint(req: SearchReq):
+    try:
+        return {"results": await web_search(req.query, min(max(req.n, 1), 10))}
+    except SearchUnavailable as e:
+        raise HTTPException(503, str(e))
+
+
 # ═════════════════════════ research comparison: "what are we building and how" (before anything is built) ═════════════════════════
 class RateLimited(Exception):
     pass
@@ -1219,9 +1304,10 @@ async def ai_compare(req: NewReq):
         ' "recommendation": {"id":"a|b|c","why":"2 sentences tied to this idea"},',
         ' "risks": ["3-4 things that could go wrong"], "questions": ["2-3 questions the owner must answer first"]}',
     ])
-    sources, grounded = [], True
+    sources, grounded, how = [], True, None
+    idea_q = (req.idea or req.name)[:200]
     try:
-        text, sources = await gemini_grounded(prompt)
+        text, sources, how = await search_grounded(prompt, [f"best ways to build {idea_q} tech stack options", f"{idea_q} architecture comparison pros cons"])
     except Exception as e:
         grounded = False
         logger.info("compare without live search (%s)", type(e).__name__)
@@ -1245,7 +1331,7 @@ async def ai_compare(req: NewReq):
         if rec.get("id") not in [a["id"] for a in apps]:
             rec["id"] = apps[0]["id"]
         result = {"building": d.get("building", ""), "goals": d.get("goals", [])[:6], "approaches": apps[:3], "recommendation": rec,
-                  "risks": d.get("risks", [])[:5], "questions": d.get("questions", [])[:4], "sources": sources, "grounded": grounded}
+                  "risks": d.get("risks", [])[:5], "questions": d.get("questions", [])[:4], "sources": sources, "grounded": grounded, "search": how}
     except Exception:
         return {"error": "The model's answer could not be read. Try again."}
     COMPARE_CACHE[key] = result
@@ -1291,9 +1377,10 @@ async def ai_novelty(req: NoveltyReq):
         ' "existing": [ up to 5 objects: {"name":"real product or project","what":"one line","similarity":0-100,"gap":"where it falls short for this owner"} ],',
         ' "differentiators": [ exactly 3 objects: {"idea":"a concrete way to stand out","why":"one sentence","novelty":1-10,"feasibility":1-10} ],',
         ' "unique_angle": "one sentence tying the best differentiator to the owner\'s motive"}'])
-    sources, grounded = [], True
+    sources, grounded, how = [], True, None
+    subj_q = (req.idea or req.name or (p or {}).get("name", ""))[:200]
     try:
-        text, sources = await gemini_grounded(prompt)
+        text, sources, how = await search_grounded(prompt, [f"{subj_q} existing products alternatives competitors", f"apps similar to {subj_q}"])
     except Exception:
         grounded = False
         out = await ask_llm("research", prompt, "You are a product strategist. Answer only with the requested JSON.")
@@ -1309,7 +1396,7 @@ async def ai_novelty(req: NoveltyReq):
                              "gap": str(x.get("gap", ""))[:200]} for x in (d.get("existing") or []) if isinstance(x, dict)][:5],
                "differentiators": [{"idea": str(x.get("idea", ""))[:200], "why": str(x.get("why", ""))[:200], "novelty": _clamp(x.get("novelty"), 1, 10, 5),
                                     "feasibility": _clamp(x.get("feasibility"), 1, 10, 5)} for x in (d.get("differentiators") or []) if isinstance(x, dict)][:4],
-               "unique_angle": str(d.get("unique_angle", "")), "sources": sources, "grounded": grounded}
+               "unique_angle": str(d.get("unique_angle", "")), "sources": sources, "grounded": grounded, "search": how}
     except Exception:
         return {"error": "The model's answer could not be read. Try again."}
     NOVELTY_CACHE[key] = res
@@ -1346,25 +1433,17 @@ def _parse_json_text(text: str) -> dict:
 
 
 async def gemini_search(query: str, context: Optional[str] = None) -> dict:
-    if not GOOGLE_KEY:
-        return await fallback_research(query, context)
-    prompt = (f"Research this topic thoroughly: {query}\n\n{f'Additional context: {context}' if context else ''}\n\n"
-              "Respond ONLY as JSON: {\"summary\": str, \"key_points\": [str], \"sources\": [str], \"confidence\": 0.0-1.0}")
+    nl = chr(10)
+    prompt = nl.join([f"Research this topic thoroughly: {query}", f"Additional context: {context}" if context else "", "",
+                      'Respond ONLY as JSON: {"summary": str, "key_points": [str], "sources": [str], "confidence": 0.0-1.0}'])
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{os.getenv('GEMINI_RESEARCH_MODEL', 'gemini-3.5-flash')}:generateContent",
-                headers={"x-goog-api-key": GOOGLE_KEY},      # header, not URL: keys must never appear in logs
-                json={"contents": [{"parts": [{"text": prompt}]}], "tools": [{"google_search": {}}]})
-            resp.raise_for_status()
-            data = resp.json()
-        text = "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
-        sources = [c["web"]["uri"] for c in data["candidates"][0].get("groundingMetadata", {}).get("groundingChunks", []) if c.get("web", {}).get("uri")]
+        text, srcs, how = await search_grounded(prompt, [query])
         result = _parse_json_text(text)
-        result["sources"] = sources or result.get("sources", [])
+        result["sources"] = srcs or result.get("sources", [])
+        result["search"] = how
         return result
     except Exception as e:
-        logger.error("Gemini search failed (%s); using router", type(e).__name__)
+        logger.info("web research falling back to the router (%s)", type(e).__name__)
         return await fallback_research(query, context)
 
 
