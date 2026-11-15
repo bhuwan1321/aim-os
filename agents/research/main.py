@@ -77,6 +77,20 @@ def record_trace(ev: dict):
     broadcast({"t": "http", **out})
 
 
+# -- AIM origin guard: browsers on other websites must not be able to change data here (CSRF) --
+_AIM_ORIGINS = ("http://localhost:8888", "http://127.0.0.1:8888")
+
+
+@app.middleware("http")
+async def _aim_origin_guard(request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        o = request.headers.get("origin")
+        if o and o not in _AIM_ORIGINS:
+            from fastapi.responses import JSONResponse as _J
+            return _J({"detail": "cross-site request refused"}, status_code=403)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def _trace_self(request: Request, call_next):
     p = request.url.path
@@ -447,8 +461,18 @@ def completion(p, nodes, edges, nst, est):
                 blockers.append({"kind": i["key"], "module": n.get("name"), "item": i["id"], "text": f"{n.get('name')}: not {i['key']}" + (f" ({i['evidence']})" if i["evidence"] and i["key"] == "tested" else "")})
     tasks = []
     for t in g.get("tasks", []):
-        done = bool(ov.get(f"task:{t['id']}"))
-        tasks.append({"id": f"task:{t['id']}", "label": t["label"], "done": done})
+        auto = t.get("auto")
+        if auto == "services_up":
+            svcs = [n for n in nodes.values() if n["id"].startswith("svc:") and n["kind"] in ("service", "db", "infra") and not n.get("job")]
+            done = bool(svcs) and all((nst.get(n["id"]) or {}).get("state") in ("ok", "slow") for n in svcs)
+        elif auto == "tests_pass":
+            lt = (p.get("overrides") or {}).get("last_test") or {}
+            done = bool(lt) and (lt.get("summary") or {}).get("fail", 1) == 0
+        elif auto == "tavily_key":
+            done = bool(TAVILY_KEY)
+        else:
+            done = bool(ov.get(f"task:{t['id']}"))
+        tasks.append({"id": f"task:{t['id']}", "label": t["label"], "done": done, "auto": bool(auto)})
         done_all += int(done); total_all += 1
         if not done: blockers.append({"kind": "task", "module": None, "item": f"task:{t['id']}", "text": t["label"]})
     seen, uniq = set(), []
@@ -1046,6 +1070,185 @@ async def layer_report(pid: str, lid: str, rep: UiReport):
                 l["tests"] = clean
         RUNS[pid].setdefault("coverage", {})[lid] = rep.coverage
     return {"ok": True, "summary": last["summary"]}
+
+
+# ═════════════════════════ project editing + dashboard summary ═════════════════════════
+AUTO_TASKS = {"services_up", "tests_pass", "tavily_key"}
+
+
+class TasksReq(BaseModel):
+    tasks: list
+
+
+@app.put("/projects/{pid}/tasks")
+async def put_tasks(pid: str, req: TasksReq):
+    p = await mem("GET", f"/research/projects/{pid}")
+    clean, seen = [], set()
+    for i, t in enumerate(req.tasks[:60]):
+        if not isinstance(t, dict) or not str(t.get("label", "")).strip():
+            continue
+        tid = re.sub(r"[^\w-]", "", str(t.get("id") or f"t{i + 1}"))[:30] or f"t{i + 1}"
+        while tid in seen:
+            tid += "x"
+        seen.add(tid)
+        item = {"id": tid, "label": str(t["label"]).strip()[:140]}
+        if t.get("auto") in AUTO_TASKS:
+            item["auto"] = t["auto"]
+        clean.append(item)
+    g = p["graph"]; g["tasks"] = clean
+    ov = p.get("overrides") or {}
+    ov["items"] = {k: v for k, v in (ov.get("items") or {}).items() if not k.startswith("task:") or k[5:] in seen}
+    LIVE_CACHE.pop(pid, None)
+    await mem("PUT", f"/research/projects/{pid}", json={**{k: p[k] for k in ("name", "kind", "type", "idea", "root")}, "graph": g, "overrides": ov})
+    return {"ok": True, "tasks": clean}
+
+
+class ProjectPatch(BaseModel):
+    name: Optional[str] = None
+    idea: Optional[str] = None
+    motive: Optional[str] = None
+
+
+@app.patch("/projects/{pid}")
+async def patch_project(pid: str, req: ProjectPatch):
+    p = await mem("GET", f"/research/projects/{pid}")
+    g = p["graph"]
+    if req.name is not None and req.name.strip():
+        p["name"] = req.name.strip()[:80]
+    if req.idea is not None:
+        p["idea"] = req.idea[:2000]
+    if req.motive is not None:
+        g["motive"] = req.motive[:500] or None
+    LIVE_CACHE.pop(pid, None)
+    return await mem("PUT", f"/research/projects/{pid}", json={**{k: p[k] for k in ("name", "kind", "type", "idea", "root")}, "graph": g, "overrides": p.get("overrides") or {}})
+
+
+@app.get("/dashboard/summary")
+async def dashboard_summary():
+    """One call for the main dashboard: every project with live completion, service health, link health, tasks and last test."""
+    out = []
+    for pl in (await mem("GET", "/research/projects"))[:8]:
+        try:
+            p = await mem("GET", f"/research/projects/{pl['id']}")
+            lv = await compute_live(p)
+        except HTTPException:
+            continue
+        nodes = p["graph"].get("nodes", [])
+        svcs = [n for n in nodes if n["id"].startswith("svc:") and n["kind"] in ("service", "db", "infra") and not n.get("job")]
+        ok = sum(1 for n in svcs if (lv["nodes"].get(n["id"]) or {}).get("state") in ("ok", "slow"))
+        links = [e for e in p["graph"].get("edges", []) if e["kind"] in ("http", "redis", "db")]
+        st = [(lv["edges"].get(e["id"]) or {}).get("state") for e in links]
+        lt = (p.get("overrides") or {}).get("last_test") or {}
+        sm = lt.get("summary") or {}
+        out.append({"id": p["id"], "name": p["name"], "kind": p["kind"], "type": p.get("type"), "pct": lv["completion"]["pct"],
+                    "services": {"ok": ok, "total": len(svcs)}, "links": {"total": len(links), "fail": st.count("fail"), "slow": st.count("slow")},
+                    "tasks": lv["completion"]["tasks"], "blockers": lv["completion"]["blocker_count"],
+                    "test": {"verdict": sm.get("verdict"), "pass": sm.get("pass"), "warn": sm.get("warn"), "fail": sm.get("fail"), "at": lt.get("finished")} if sm else None})
+    return {"projects": out, "ts": time.time()}
+
+
+# ═════════════════════════ file editor (workspace projects are editable; AIM OS itself is read-only here; secrets are never served) ═════════════════════════
+DENY_DIRS = {".git", "data", "runtime", "node_modules", "__pycache__", "venv", ".venv", ".idea"}
+SECRET_RX = re.compile(r"^(\.env(\..*)?|.*\.pem|id_rsa.*|id_ed25519.*|.*\.key|.*\.p12|credentials.*|\.npmrc|\.pypirc)$", re.I)
+SAFE_ENV = {".env.example", ".env.sample", ".env.template"}
+MAX_EDIT = 1_000_000
+
+
+def _fs(p, rel):
+    """Resolve rel inside the project root or raise. Returns (root, full, writable)."""
+    if not p.get("root"):
+        raise HTTPException(400, "This project has no folder")
+    root = os.path.realpath(p["root"])
+    rel = (rel or "").replace("\\", "/").strip("/")
+    full = os.path.realpath(os.path.join(root, rel))
+    if full != root and not full.startswith(root + os.sep):
+        raise HTTPException(400, "Path is outside the project folder")
+    parts = [x for x in rel.split("/") if x]
+    if any(x in DENY_DIRS for x in parts):
+        raise HTTPException(403, "This folder is hidden (git internals, data, caches)")
+    if parts and SECRET_RX.match(parts[-1]) and parts[-1].lower() not in SAFE_ENV:
+        raise HTTPException(403, "Secret files (.env, keys, certificates) are never opened here")
+    ws = os.path.realpath(os.path.join(PROJECT_ROOTS, "workspace"))
+    return root, full, (root == ws or root.startswith(ws + os.sep))
+
+
+class FileReq(BaseModel):
+    path: str
+    content: str = ""
+
+
+@app.get("/projects/{pid}/tree")
+async def file_tree(pid: str, path: str = ""):
+    p = await mem("GET", f"/research/projects/{pid}")
+    root, full, writable = _fs(p, path)
+    if not os.path.isdir(full):
+        raise HTTPException(404, "Not a folder")
+    items = []
+    for name in sorted(os.listdir(full), key=lambda n: (not os.path.isdir(os.path.join(full, n)), n.lower())):
+        if name in DENY_DIRS or (SECRET_RX.match(name) and name.lower() not in SAFE_ENV):
+            continue
+        fp = os.path.join(full, name)
+        isd = os.path.isdir(fp)
+        items.append({"name": name, "dir": isd, "size": 0 if isd else os.path.getsize(fp)})
+    return {"path": path, "writable": writable, "items": items[:500]}
+
+
+@app.get("/projects/{pid}/file")
+async def read_file(pid: str, path: str):
+    p = await mem("GET", f"/research/projects/{pid}")
+    root, full, writable = _fs(p, path)
+    if not os.path.isfile(full):
+        raise HTTPException(404, "File not found")
+    size = os.path.getsize(full)
+    if size > MAX_EDIT:
+        raise HTTPException(413, f"File is {size // 1024} KB - the editor opens files up to 1000 KB")
+    raw = open(full, "rb").read()
+    if b"\0" in raw[:8192]:
+        raise HTTPException(415, "Binary file - not shown")
+    return {"path": path, "content": raw.decode("utf-8", errors="replace"), "size": size, "writable": writable}
+
+
+@app.put("/projects/{pid}/file")
+async def write_file(pid: str, req: FileReq):
+    p = await mem("GET", f"/research/projects/{pid}")
+    root, full, writable = _fs(p, req.path)
+    if not writable:
+        raise HTTPException(403, "Read-only: only projects inside the workspace folder can be edited here")
+    if len(req.content.encode("utf-8")) > MAX_EDIT:
+        raise HTTPException(413, "File too large for the editor")
+    if not os.path.isfile(full):
+        raise HTTPException(404, "File not found (use New file to create one)")
+    tmp = full + ".aimtmp"
+    with open(tmp, "w", encoding="utf-8", newline="") as f:
+        f.write(req.content)
+    os.replace(tmp, full)
+    return {"ok": True, "size": os.path.getsize(full)}
+
+
+@app.post("/projects/{pid}/file/new")
+async def new_file(pid: str, req: FileReq):
+    p = await mem("GET", f"/research/projects/{pid}")
+    root, full, writable = _fs(p, req.path)
+    if not writable:
+        raise HTTPException(403, "Read-only: only projects inside the workspace folder can be edited here")
+    if os.path.exists(full):
+        raise HTTPException(409, "That file already exists")
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w", encoding="utf-8", newline="") as f:
+        f.write(req.content or "")
+    return {"ok": True}
+
+
+@app.delete("/projects/{pid}/file")
+async def delete_file(pid: str, path: str):
+    p = await mem("GET", f"/research/projects/{pid}")
+    root, full, writable = _fs(p, path)
+    if not writable:
+        raise HTTPException(403, "Read-only: only projects inside the workspace folder can be edited here")
+    if not os.path.isfile(full):
+        raise HTTPException(404, "File not found")
+    os.remove(full)
+    return {"ok": True}
 
 
 # ═════════════════════════ understand a repo, then plan how to complete it (plan first, build only on approval) ═════════════════════════

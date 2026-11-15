@@ -321,54 +321,13 @@ header::before{
 <!-- ══ LEFT ══ -->
 <aside class="left">
   <div>
-    <div class="plabel">Projects</div>
-    <div class="proj act">
-      <div class="pname">AIM-OS</div>
-      <div class="pmeta">Docker Stack · Local</div>
-      <span class="pstatus active">ACTIVE</span>
-      <div class="mini-chart">
-        <div class="bar-row"><span class="bar-label">Services</span><div class="bar-track"><div class="bar-fill" style="width:75%"></div></div><span class="bar-val">6/8</span></div>
-        <div class="bar-row"><span class="bar-label">Memory</span><div class="bar-track"><div class="bar-fill" style="width:60%"></div></div><span class="bar-val">12</span></div>
-        <div class="bar-row"><span class="bar-label">Progress</span><div class="bar-track"><div class="bar-fill" style="width:55%"></div></div><span class="bar-val">55%</span></div>
-      </div>
-    </div>
-    <div class="proj">
-      <div class="pname">RAG Pipeline</div>
-      <div class="pmeta">Abhinavana Tech</div>
-      <span class="pstatus paused">PAUSED</span>
-      <div class="mini-chart">
-        <div class="bar-row"><span class="bar-label">Accuracy</span><div class="bar-track"><div class="bar-fill" style="width:88%"></div></div><span class="bar-val">88%</span></div>
-        <div class="bar-row"><span class="bar-label">Models</span><div class="bar-track"><div class="bar-fill" style="width:90%"></div></div><span class="bar-val">3</span></div>
-      </div>
-    </div>
-    <div class="proj">
-      <div class="pname">ICMACC 2026</div>
-      <div class="pmeta">IEEE Conference</div>
-      <span class="pstatus live">LIVE</span>
-      <div class="mini-chart">
-        <div class="bar-row"><span class="bar-label">Traffic</span><div class="bar-track"><div class="bar-fill" style="width:92%"></div></div><span class="bar-val">High</span></div>
-        <div class="bar-row"><span class="bar-label">Uptime</span><div class="bar-track"><div class="bar-fill" style="width:99%"></div></div><span class="bar-val">99%</span></div>
-      </div>
-    </div>
-    <div class="proj">
-      <div class="pname">Sintillashunz</div>
-      <div class="pmeta">1000s registered</div>
-      <span class="pstatus done">DONE</span>
-      <div class="mini-chart">
-        <div class="bar-row"><span class="bar-label">Registrations</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span class="bar-val">✓</span></div>
-      </div>
-    </div>
+    <div class="plabel">Projects <a href="research.html" style="float:right;color:var(--c);text-decoration:none;letter-spacing:1px">OPEN</a></div>
+    <div id="projList"><div class="proj"><div class="pmeta">loading projects...</div></div></div>
   </div>
 
   <div>
-    <div class="plabel">Build Plan</div>
-    <div class="plan-item"><div class="plan-dot done"></div><div class="plan-tx done-tx">Install Docker + NVIDIA driver</div></div>
-    <div class="plan-item"><div class="plan-dot done"></div><div class="plan-tx done-tx">Build LLM Router service</div></div>
-    <div class="plan-item"><div class="plan-dot done"></div><div class="plan-tx done-tx">Build Memory Engine</div></div>
-    <div class="plan-item"><div class="plan-dot act"></div><div class="plan-tx">Build JARVIS UI ← now</div></div>
-    <div class="plan-item"><div class="plan-dot todo"></div><div class="plan-tx">Connect React Dashboard</div></div>
-    <div class="plan-item"><div class="plan-dot todo"></div><div class="plan-tx">Launch docker compose</div></div>
-    <div class="plan-item"><div class="plan-dot todo"></div><div class="plan-tx">Host bridge + screen agent</div></div>
+    <div class="plabel">Build Plan <span id="planPct" style="float:right;color:var(--c)"></span></div>
+    <div id="planList"><div class="plan-item"><div class="plan-dot todo"></div><div class="plan-tx">loading...</div></div></div>
   </div>
 </aside>
 
@@ -881,6 +840,49 @@ async function fetchLiveData() {
     // ── HOST BRIDGE POLLING ───────────────────────
 const BRIDGE = 'http://localhost:9999';
 
+
+
+// ── PROJECTS + BUILD PLAN (live, from the Research Center) ──
+const RESEARCH = 'http://localhost:8005';
+const escH = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function barRow(label, pct, val) { return `<div class="bar-row"><span class="bar-label">${label}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div><span class="bar-val">${val}</span></div>`; }
+async function loadProjectsPanel() {
+  const list = document.getElementById('projList'), plan = document.getElementById('planList');
+  try {
+    const r = await fetch(`${RESEARCH}/dashboard/summary`, {signal: AbortSignal.timeout(8000)});
+    const d = await r.json(), ps = d.projects || [];
+    if (!ps.length) {
+      list.innerHTML = '<div class="proj"><div class="pmeta">No projects yet. Open Research Mode to add one.</div></div>';
+      plan.innerHTML = '<div class="plan-item"><div class="plan-dot todo"></div><div class="plan-tx">Nothing to plan yet</div></div>';
+      document.getElementById('planPct').textContent = ''; return;
+    }
+    list.innerHTML = ps.map((p, i) => {
+      const st = p.kind === 'planned' ? ['PLANNED', 'paused'] : p.pct >= 100 ? ['DONE', 'done'] : (p.services.total && p.services.ok < p.services.total) ? ['DEGRADED', 'paused'] : ['ACTIVE', 'active'];
+      const t = p.test;
+      return `<a href="research.html?project=${p.id}" style="text-decoration:none;color:inherit"><div class="proj ${i === 0 ? 'act' : ''}">
+        <div class="pname">${escH(p.name)}</div><div class="pmeta">${escH(p.kind === 'planned' ? 'planned project' : (p.type || 'project'))}${p.blockers ? ' · ' + p.blockers + ' blocking' : ''}</div>
+        <span class="pstatus ${st[1]}">${st[0]}</span>
+        <div class="mini-chart">
+          ${p.services.total ? barRow('Services', 100 * p.services.ok / p.services.total, `${p.services.ok}/${p.services.total}`) : ''}
+          ${p.links.total ? barRow('Links', 100 * (p.links.total - p.links.fail - p.links.slow) / p.links.total, `${p.links.total - p.links.fail - p.links.slow}/${p.links.total}`) : ''}
+          ${barRow('Progress', p.pct, p.pct + '%')}
+          ${t ? barRow('Tests', 100 * (t.pass || 0) / Math.max(1, (t.pass || 0) + (t.warn || 0) + (t.fail || 0)), t.fail ? t.fail + ' fail' : (t.verdict || '').startsWith('PASS') ? 'ok' : '?') : ''}
+        </div></div></a>`;
+    }).join('');
+    const main = ps.find(p => p.tasks && p.tasks.length) || ps[0];
+    const tasks = main.tasks || [];
+    let marked = false;
+    plan.innerHTML = tasks.length ? tasks.map(t => {
+      const cls = t.done ? 'done' : (!marked ? (marked = true, 'act') : 'todo');
+      return `<div class="plan-item"><div class="plan-dot ${cls}"></div><div class="plan-tx ${t.done ? 'done-tx' : ''}">${escH(t.label)}${cls === 'act' ? ' ← now' : ''}${t.auto ? ' <span style="color:var(--txm)">(auto)</span>' : ''}</div></div>`;
+    }).join('') : '<div class="plan-item"><div class="plan-dot todo"></div><div class="plan-tx">No plan yet - add tasks in Research Mode</div></div>';
+    document.getElementById('planPct').textContent = `${main.name} ${main.pct}%`;
+  } catch (e) {
+    list.innerHTML = '<div class="proj"><div class="pmeta">Research agent not reachable</div></div>';
+  }
+}
+loadProjectsPanel();
+setInterval(() => { if (!document.hidden) loadProjectsPanel(); }, 10000);
 
 // ── HOST STATS (CPU / RAM from the host bridge) ──
 async function pollHostBridge() {

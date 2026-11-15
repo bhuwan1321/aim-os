@@ -36,6 +36,20 @@ def _aim_trace(ev):
         pass
 
 
+# -- AIM origin guard: browsers on other websites must not be able to change data here (CSRF) --
+_AIM_ORIGINS = ("http://localhost:8888", "http://127.0.0.1:8888")
+
+
+@app.middleware("http")
+async def _aim_origin_guard(request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        o = request.headers.get("origin")
+        if o and o not in _AIM_ORIGINS:
+            from fastapi.responses import JSONResponse as _J
+            return _J({"detail": "cross-site request refused"}, status_code=403)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def _aim_trace_mw(request, call_next):
     p = request.url.path
@@ -52,6 +66,26 @@ async def _aim_trace_mw(request, call_next):
             "ms": int((_aim_t.time() - t0) * 1000), "ip": request.client.host if request.client else "",
             "size": int(request.headers.get("content-length") or 0)},)).start()
 _pw = {"p": None, "browser": None}
+
+
+import ipaddress as _ip
+import socket as _sock
+
+
+def _host_blocked(host: str) -> bool:
+    """Private, loopback, link-local and reserved addresses are off limits (SSRF), except hosts listed in AIM_BROWSE_ALLOW (default: dashboard)."""
+    allow = {h.strip().lower() for h in os.getenv("AIM_BROWSE_ALLOW", "dashboard").split(",") if h.strip()}
+    if (host or "").lower() in allow:
+        return False
+    try:
+        infos = _sock.getaddrinfo(host, None)
+    except OSError:
+        return False        # unresolvable: the browser will fail on its own
+    for fam, _, _, _, sa in infos:
+        ip = _ip.ip_address(sa[0].split("%")[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+            return True
+    return False
 
 
 class BrowseReq(BaseModel):
@@ -101,7 +135,17 @@ async def browse(req: BrowseReq):
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise HTTPException(400, "Only http(s) URLs are allowed")
 
+    if _host_blocked(parsed.hostname or ""):
+        raise HTTPException(403, "Blocked: that address is private or internal. Add its hostname to AIM_BROWSE_ALLOW to allow it.")
     ctx = await _pw["browser"].new_context()
+
+    async def _guard(route):          # covers redirects and sub-requests too
+        h = urlparse(route.request.url).hostname or ""
+        if route.request.url.startswith(("http://", "https://")) and _host_blocked(h):
+            await route.abort()
+        else:
+            await route.continue_()
+    await ctx.route("**/*", _guard)
     try:
         page = await ctx.new_page()
         await page.goto(req.url, wait_until="domcontentloaded", timeout=30000)

@@ -793,11 +793,26 @@ def security_tests(ctx):
             raise TestWarn(f"APIs listen on all interfaces with no authentication (anyone on your Wi-Fi/LAN can call them): {api}", "127.0.0.1:port", api)
     out.append(T("security", "published ports: databases are local-only, APIs bound to localhost", exposure))
 
-    async def noauth(ctx):
-        r = await ctx.call("DELETE", U("memory", f"/memories/{uuid.uuid4()}"))
-        if r.status < 400:
-            raise TestWarn("destructive API calls need no authentication (DELETE /memories/{id} answered 200 for an anonymous caller)", "401/403", r.status)
-    out.append(T("security", "destructive endpoints require authentication", noauth))
+    async def csrf(ctx):
+        bad = []
+        for svc, meth, path, body in (("memory", "DELETE", f"/memories/{uuid.uuid4()}", None), ("memory", "POST", "/memories/search", {"query": "x"}),
+                                      ("timeline", "POST", "/events", {"event_type": "aimtest", "description": "x"}), ("notification", "DELETE", "/history/test", None),
+                                      ("research-agent", "POST", "/projects/clone", {"url": "https://github.com/a/b"}), ("research-agent", "POST", "/projects/new", {"name": "aimtest"}),
+                                      ("browser-agent", "POST", "/browse", {"url": "http://dashboard:8888/", "summarize": False, "store": False}), ("voice-agent", "POST", "/speak", {"text": "x"})):
+            kw = {"json": body} if body is not None else {}
+            r = await ctx.call(meth, U(svc, path), headers={"Origin": "https://evil.example"}, **kw)
+            if r.status != 403:
+                bad.append(f"{meth} {svc}{path} -> {r.status}")
+        check(not bad, f"requests from another website were NOT refused: {bad}", "403", bad)
+        ok = await ctx.call("POST", U("memory", "/memories/search"), headers={"Origin": "http://localhost:8888"}, json={"query": "aimtest"}, timeout=40)
+        check(ok.status != 403, "the dashboard's own origin must still work", "not 403", ok.status)
+        ctx.note("there is no login (local-only app): protection = ports bound to localhost + cross-site writes refused")
+    out.append(T("security", "cross-site (CSRF) write requests are refused; the dashboard origin still works", csrf))
+
+    async def dash_cors(ctx):
+        r = await ctx.call("GET", U("dashboard", "/index.html"), headers={"Origin": "https://evil.example"})
+        check(r.headers.get("access-control-allow-origin") is None, "dashboard server lets any website read its pages (CORS)", "no CORS header", r.headers.get("access-control-allow-origin"))
+    out.append(T("security", "dashboard server sends no permissive CORS header", dash_cors))
 
     async def sqli(ctx):
         bad = []
@@ -843,12 +858,15 @@ def security_tests(ctx):
     out.append(T("security", "git clone only accepts public https links on known hosts", clone_rules))
 
     async def ssrf(ctx):
-        r = await ctx.call("POST", U("browser-agent", "/browse"), json={"url": "file:///etc/passwd", "summarize": False, "store": False})
+        base = {"summarize": False, "store": False}
+        r = await ctx.call("POST", U("browser-agent", "/browse"), json={"url": "file:///etc/passwd", **base})
         check(r.status == 400, f"browser agent accepted a file:// URL ({r.status})", 400, r.status)
-        r = await ctx.call("POST", U("browser-agent", "/browse"), json={"url": "http://memory:8003/health", "summarize": False, "store": False}, timeout=40)
-        if r.status == 200:
-            raise TestWarn("browser agent can fetch internal-only services (http://memory:8003) - an SSRF surface if exposed beyond localhost", "block private hosts", "fetched")
-    out.append(T("security", "browser agent refuses file:// and internal addresses", ssrf, timeout=90))
+        for target in ("http://memory:8003/health", "http://redis:6379/", "http://169.254.169.254/latest/meta-data/", "http://host.docker.internal:9999/health", "http://127.0.0.1:8005/health"):
+            r = await ctx.call("POST", U("browser-agent", "/browse"), json={"url": target, **base}, timeout=40)
+            check(r.status == 403, f"browser agent fetched an internal address: {target} ({r.status})", 403, r.status)
+        ok = await ctx.call("POST", U("browser-agent", "/browse"), json={"url": "http://dashboard:8888/index.html", **base}, timeout=40)
+        check(ok.status == 200, "the allow-listed dashboard must still be browsable", 200, ok.status)
+    out.append(T("security", "browser agent blocks private/internal addresses (SSRF) but allows the dashboard", ssrf, timeout=200))
 
     async def hammer(ctx):
         rs = await asyncio.gather(*[ctx.call("GET", U("timeline", "/health")) for _ in range(60)])

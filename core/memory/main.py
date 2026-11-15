@@ -36,6 +36,20 @@ def _aim_trace(ev):
         pass
 
 
+# -- AIM origin guard: browsers on other websites must not be able to change data here (CSRF) --
+_AIM_ORIGINS = ("http://localhost:8888", "http://127.0.0.1:8888")
+
+
+@app.middleware("http")
+async def _aim_origin_guard(request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        o = request.headers.get("origin")
+        if o and o not in _AIM_ORIGINS:
+            from fastapi.responses import JSONResponse as _J
+            return _J({"detail": "cross-site request refused"}, status_code=403)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def _aim_trace_mw(request, call_next):
     p = request.url.path

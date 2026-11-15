@@ -168,6 +168,20 @@ svg#g:active{cursor:grabbing}
 .tft{border-top:1px solid var(--bord);padding:8px 16px;display:flex;gap:24px;color:var(--txd);flex-wrap:wrap}
 .tft b{color:var(--c);font-weight:400}
 .hrun{display:inline-block;width:10px;height:18px;margin-right:2px;vertical-align:middle}
+.ed{width:min(1180px,96vw);height:90vh;display:flex;flex-direction:column;padding:0}
+.ed .hd{display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--bord)}
+.ed .hd h3{margin:0;flex:1}
+.ed .hd .btn.on{background:var(--c);color:#001018;border-color:var(--c)}
+.edp{padding:16px;overflow:auto;flex:1}
+.edp label{display:block;color:var(--txm);font-size:10px;letter-spacing:2px;margin:12px 0 4px;font-family:Orbitron,sans-serif}
+.trow2{display:grid;grid-template-columns:22px 1fr 54px 28px;gap:8px;align-items:center;margin:5px 0}
+.edf{display:grid;grid-template-columns:290px 1fr;flex:1;min-height:0}
+.ftree{overflow:auto;border-right:1px solid var(--bord);padding:6px 0}
+.ti{padding:3px 8px;cursor:pointer;white-space:nowrap;color:var(--txd);overflow:hidden;text-overflow:ellipsis}
+.ti:hover{background:var(--cd);color:var(--tx)}.ti.sel{background:var(--cd);color:var(--c)}.ti.d{color:var(--c)}
+.fed{display:flex;flex-direction:column;min-height:0}
+.fbar{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--bord);flex-wrap:wrap}
+.code{flex:1;width:100%;resize:none;font-family:'Share Tech Mono',monospace;font-size:12px;line-height:1.5;background:#020c16;border:0;color:var(--tx);padding:10px;tab-size:4;white-space:pre;overflow:auto;outline:none}
 @media(max-width:1150px){.app{grid-template-columns:190px 1fr 250px}.dock{grid-template-columns:150px 1fr 230px}.toolbar .title{display:none}}
 ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:var(--bord)}
 </style>
@@ -214,6 +228,7 @@ svg#g:active{cursor:grabbing}
       <button class="btn" id="bFit">Fit</button>
       <button class="btn" id="bRescan">Rescan</button>
       <button class="btn pri" id="bTest">Test</button>
+      <button class="btn" id="bEdit">Edit</button>
     </div>
     <svg id="g"><g id="vp"><g id="cols"></g><g id="links"></g><g id="pk"></g><g id="nodes"></g></g></svg>
     <div class="empty" id="empty"><div><b>OPEN OR CREATE A PROJECT</b><br>Open a folder to map how it really works,<br>or describe an idea to get a planned map and checklist.</div></div>
@@ -249,6 +264,11 @@ svg#g:active{cursor:grabbing}
     <label style="color:var(--txd);display:flex;gap:6px;align-items:center"><input type="checkbox" id="tcAi" checked style="width:auto"> include external calls (AI, web, git)</label>
     <button class="btn pri" id="tcRun">Run all tests</button><button class="btn" id="tcUi">Run UI tests</button><button class="btn" id="tcClose">Close</button></div>
   <div id="tcBody" style="display:flex;flex-direction:column;flex:1;min-height:0"></div>
+</div></div>
+
+<div class="modal" id="mEdit"><div class="card ed">
+  <div class="hd"><h3 id="edTitle">EDIT</h3><button class="btn on" data-et="project">Project</button><button class="btn" data-et="files">Files</button><button class="btn" id="edClose">Close</button></div>
+  <div id="edBody" style="display:flex;flex-direction:column;flex:1;min-height:0"></div>
 </div></div>
 
 <div class="modal" id="mOpen"><div class="card">
@@ -316,7 +336,7 @@ async function loadProjects(selectId) {
     if (P && P.id === el.dataset.del) { P = null; render(); }
     loadProjects();
   });
-  const want = selectId || (P && P.id) || localStorage.getItem('aim.research.project');
+  const want = selectId || (P && P.id) || new URLSearchParams(location.search).get('project') || localStorage.getItem('aim.research.project');
   if (!P && want && list.some(p => p.id === want)) selectProject(want);
 }
 
@@ -979,6 +999,98 @@ $('#tcUi').onclick = async () => {
   } catch (e) { alert(e.message); }
   b.disabled = false; b.textContent = 'Run UI tests';
 };
+
+
+/* ---------- editor: project fields, tasks, files ---------- */
+let ED = {tab: 'project', open: null, dirty: false, writable: false, orig: '', changed: false, dirs: {}, expanded: new Set()};
+$('#bEdit').onclick = () => { if (!P) return; $('#mEdit').classList.add('show'); $('#edTitle').textContent = 'EDIT - ' + P.name.toUpperCase(); ED.open = null; ED.dirty = false; ED.changed = false; ED.dirs = {}; ED.expanded = new Set(); edTab('project'); };
+$('#edClose').onclick = async () => {
+  if (ED.dirty && !confirm('Discard unsaved changes?')) return;
+  ED.dirty = false; $('#mEdit').classList.remove('show');
+  if (ED.changed && P.kind === 'scanned') { try { await post(`/projects/${P.id}/rescan`); } catch (e) {} }
+  await selectProject(P.id);
+};
+document.querySelectorAll('[data-et]').forEach(b => b.onclick = () => { if (ED.dirty && !confirm('Discard unsaved changes?')) return; ED.dirty = false; edTab(b.dataset.et); });
+function edTab(t) { ED.tab = t; document.querySelectorAll('[data-et]').forEach(b => b.classList.toggle('on', b.dataset.et === t)); if (t === 'project') edProject(); else edFiles(); }
+
+function edProject() {
+  const g = P.graph, done = {}; ((LIVE && LIVE.completion && LIVE.completion.tasks) || []).forEach(t => { done[t.id] = t.done; });
+  $('#edBody').innerHTML = `<div class="edp">
+    <label>NAME</label><input type="text" id="epName" value="${esc(P.name)}">
+    <label>IDEA / DESCRIPTION</label><textarea id="epIdea">${esc(P.idea || '')}</textarea>
+    <label>YOUR WHY (motive)</label><textarea id="epWhy">${esc(g.motive || '')}</textarea>
+    <div class="row" style="display:flex;gap:8px"><button class="btn pri" id="epSave">Save project details</button><span id="epMsg" class="quiet"></span></div>
+    <label style="margin-top:22px">TASKS (tick = done; "auto" tasks tick themselves from live signals)</label>
+    <div id="epTasks">${(g.tasks || []).map(t => `<div class="trow2" data-id="${esc(t.id)}" data-auto="${esc(t.auto || '')}"><input type="checkbox" ${done['task:' + t.id] ? 'checked' : ''} ${t.auto ? 'disabled' : ''}><input type="text" value="${esc(t.label)}"><span style="color:var(--txm)">${t.auto ? 'auto' : ''}</span><button class="btn" data-rm title="remove task">-</button></div>`).join('')}</div>
+    <div class="row" style="display:flex;gap:8px"><button class="btn" id="epAdd">+ Add task</button><button class="btn pri" id="epSaveT">Save tasks</button><span id="epTMsg" class="quiet"></span></div>
+    <label style="margin-top:22px">DANGER ZONE</label>
+    <button class="btn" id="epDel" style="border-color:var(--fail);color:var(--fail)">Delete this project</button>
+    <div style="color:var(--txm);margin-top:4px">Removes it from the Research Center only. Files on disk are not touched.</div></div>`;
+  const bindRm = () => document.querySelectorAll('#epTasks [data-rm]').forEach(b => b.onclick = () => b.parentElement.remove());
+  bindRm();
+  $('#epSave').onclick = async () => { try { P = await api(`/projects/${P.id}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: $('#epName').value, idea: $('#epIdea').value, motive: $('#epWhy').value})}); P.graph.nodes = P.graph.nodes || []; P.graph.edges = P.graph.edges || []; $('#epMsg').textContent = 'saved'; $('#edTitle').textContent = 'EDIT - ' + P.name.toUpperCase(); $('#ptitle').textContent = P.name.toUpperCase(); loadProjects(); } catch (e) { $('#epMsg').textContent = e.message; } };
+  $('#epAdd').onclick = () => { const d = document.createElement('div'); d.className = 'trow2'; d.dataset.id = 'n' + Date.now().toString(36); d.dataset.auto = ''; d.innerHTML = '<input type="checkbox"><input type="text" value="" placeholder="new task"><span></span><button class="btn" data-rm>-</button>'; $('#epTasks').appendChild(d); bindRm(); d.querySelector('input[type=text]').focus(); };
+  $('#epSaveT').onclick = async () => {
+    const rows = [...document.querySelectorAll('#epTasks .trow2')].map(r => ({id: r.dataset.id, label: r.querySelector('input[type=text]').value.trim(), auto: r.dataset.auto || undefined, done: r.querySelector('input[type=checkbox]').checked, isAuto: !!r.dataset.auto})).filter(r => r.label);
+    try {
+      await api(`/projects/${P.id}/tasks`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tasks: rows.map(r => ({id: r.id, label: r.label, auto: r.auto}))})});
+      for (const r of rows) if (!r.isAuto) await post(`/projects/${P.id}/override`, {key: 'task:' + r.id, value: r.done});
+      P = await api('/projects/' + P.id); P.graph.nodes = P.graph.nodes || []; P.graph.edges = P.graph.edges || []; P.graph.tasks = P.graph.tasks || []; await refreshLive(); $('#epTMsg').textContent = 'saved'; edProject();
+    } catch (e) { $('#epTMsg').textContent = e.message; }
+  };
+  $('#epDel').onclick = async () => { if (!confirm('Delete project "' + P.name + '" from the Research Center?')) return; await api('/projects/' + P.id, {method: 'DELETE'}); $('#mEdit').classList.remove('show'); P = null; render(); loadProjects(); };
+}
+
+async function edFiles() {
+  if (P.kind === 'planned' || !P.root) { $('#edBody').innerHTML = '<div class="edp"><div class="box quiet">This is a plan, not a folder: there are no files yet. Open or clone a project to edit its files.</div></div>'; return; }
+  $('#edBody').innerHTML = `<div class="edf"><div class="ftree" id="ftree">loading...</div><div class="fed">
+    <div class="fbar"><b id="fpathl" style="color:var(--c)">no file open</b><span style="flex:1"></span><span id="fst" class="quiet"></span>
+      <button class="btn pri" id="fSave" disabled>Save</button><button class="btn" id="fRev" disabled>Revert</button><button class="btn" id="fNew">New file</button><button class="btn" id="fDel" disabled style="border-color:var(--fail);color:var(--fail)">Delete file</button></div>
+    <div id="fnote" style="padding:6px 12px;color:var(--txm)"></div>
+    <textarea class="code" id="fcode" spellcheck="false" disabled placeholder="Pick a file on the left"></textarea></div></div>`;
+  await edLoadDir('');
+  $('#fSave').onclick = edSave; $('#fRev').onclick = () => { $('#fcode').value = ED.orig; ED.dirty = false; edBtns(); };
+  $('#fNew').onclick = edNew; $('#fDel').onclick = edDelete;
+  $('#fcode').addEventListener('input', () => { ED.dirty = $('#fcode').value !== ED.orig; edBtns(); });
+  $('#fcode').addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); edSave(); } if (e.key === 'Tab') { e.preventDefault(); const t = e.target, a = t.selectionStart; t.value = t.value.slice(0, a) + '    ' + t.value.slice(t.selectionEnd); t.selectionStart = t.selectionEnd = a + 4; t.dispatchEvent(new Event('input')); } });
+}
+function edBtns() { const w = ED.writable && ED.open; $('#fSave').disabled = !(w && ED.dirty); $('#fRev').disabled = !(w && ED.dirty); $('#fDel').disabled = !w; $('#fNew').disabled = !ED.writable; $('#fst').textContent = ED.open ? (ED.dirty ? 'unsaved changes' : (ED.savedAt ? 'saved ' + ED.savedAt : '')) : ''; }
+async function edLoadDir(path) {
+  try { const d = await api(`/projects/${P.id}/tree?path=${encodeURIComponent(path)}`); ED.dirs[path] = d.items; ED.writable = d.writable; if (!path) ED.expanded.add(''); edDrawTree(); $('#fnote').textContent = ED.writable ? '' : 'Read-only: this folder is mounted read-only (AIM OS itself). Projects cloned or uploaded into workspace/ can be edited.'; edBtns(); }
+  catch (e) { $('#ftree').innerHTML = `<div class="box quiet">${esc(e.message)}</div>`; }
+}
+function edDrawTree() {
+  const rows = [];
+  const walk = (path, depth) => (ED.dirs[path] || []).forEach(it => {
+    const rel = (path ? path + '/' : '') + it.name;
+    rows.push(`<div class="ti ${it.dir ? 'd' : ''} ${ED.open === rel ? 'sel' : ''}" style="padding-left:${8 + depth * 14}px" data-p="${esc(rel)}" data-d="${it.dir ? 1 : 0}">${it.dir ? (ED.expanded.has(rel) ? '▾ ' : '▸ ') : '  '}${esc(it.name)}</div>`);
+    if (it.dir && ED.expanded.has(rel)) walk(rel, depth + 1);
+  });
+  walk('', 0);
+  $('#ftree').innerHTML = rows.join('') || '<div class="box quiet">Empty folder</div>';
+  document.querySelectorAll('#ftree .ti').forEach(el => el.onclick = async () => {
+    const rel = el.dataset.p;
+    if (el.dataset.d === '1') { if (ED.expanded.has(rel)) ED.expanded.delete(rel); else { ED.expanded.add(rel); if (!ED.dirs[rel]) await edLoadDir(rel); } edDrawTree(); return; }
+    if (ED.dirty && !confirm('Discard unsaved changes?')) return;
+    try { const f = await api(`/projects/${P.id}/file?path=${encodeURIComponent(rel)}`); ED.open = rel; ED.orig = f.content; ED.dirty = false; ED.savedAt = ''; $('#fcode').value = f.content; $('#fcode').disabled = !f.writable; $('#fpathl').textContent = rel; edDrawTree(); edBtns(); }
+    catch (e) { $('#fst').textContent = e.message; }
+  });
+}
+async function edSave() {
+  if (!ED.open || !ED.dirty) return;
+  try { const v = $('#fcode').value; await api(`/projects/${P.id}/file`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: ED.open, content: v})}); ED.orig = v; ED.dirty = false; ED.changed = true; ED.savedAt = new Date().toLocaleTimeString(); edBtns(); }
+  catch (e) { $('#fst').textContent = e.message; }
+}
+async function edNew() {
+  const name = prompt('New file path (relative to the project folder)', ''); if (!name) return;
+  try { await post(`/projects/${P.id}/file/new`, {path: name.trim(), content: ''}); ED.changed = true; ED.dirs = {}; await edLoadDir(''); const dir = name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : ''; if (dir) { ED.expanded.add(dir); await edLoadDir(dir); } edDrawTree(); }
+  catch (e) { $('#fst').textContent = e.message; }
+}
+async function edDelete() {
+  if (!ED.open || !confirm('Delete file ' + ED.open + ' from disk? This cannot be undone.')) return;
+  try { await api(`/projects/${P.id}/file?path=${encodeURIComponent(ED.open)}`, {method: 'DELETE'}); ED.changed = true; ED.open = null; ED.dirty = false; ED.dirs = {}; await edLoadDir(''); $('#fcode').value = ''; $('#fcode').disabled = true; $('#fpathl').textContent = 'no file open'; edBtns(); }
+  catch (e) { $('#fst').textContent = e.message; }
+}
 
 /* ---------- modals / buttons ---------- */
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => { b.closest('.modal').classList.remove('show'); if (typeof resetNew === 'function') resetNew(); });
