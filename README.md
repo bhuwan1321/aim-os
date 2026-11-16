@@ -11,6 +11,9 @@ Windows, macOS and Linux. Runs locally in Docker. API keys are optional.</p>
   <a href="#research-mode"><b>Research Mode</b></a>
 </p>
 
+<p align="center"><sub>Built with</sub><br>
+<img src="https://skillicons.dev/icons?i=py,fastapi,docker,redis,postgres,html,css,js" alt="Python, FastAPI, Docker, Redis, PostgreSQL, HTML, CSS, JavaScript" height="40"></p>
+
 AIM OS (Artificial Intelligence Memory Operating System) is fourteen containers talking over a Redis event bus.
 It keeps your context in a four-tier memory, researches topics on its own, notifies you when something matters
 and answers in a warm, slowed-down voice. Everything it stores stays inside this folder.
