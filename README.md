@@ -1,102 +1,177 @@
-# AIM OS
+<h1 align="center">AIM OS</h1>
 
-Artificial Intelligence Memory Operating System: a persistent, JARVIS-style personal AI that watches
-your context, remembers it (vector + relational memory), researches automatically, and talks to you
-in a Baymax-style voice. Fourteen containers talking over a Redis event bus.
+<p align="center"><b>A personal AI that remembers, researches and talks back.</b><br>
+Persistent vector and relational memory, automatic research, a JARVIS-style dashboard and a Baymax-style voice.<br>
+Windows, macOS and Linux. Runs locally in Docker. API keys are optional.</p>
 
-## Run it (Windows, macOS, Linux)
+<p align="center">
+  <a href="#quick-start"><b>Quick start</b></a> ·
+  <a href="#what-you-can-do"><b>What you can do</b></a> ·
+  <a href="#services"><b>Services</b></a> ·
+  <a href="#research-mode"><b>Research Mode</b></a>
+</p>
 
-Requirements: **Docker** (Desktop or Engine) and **Python 3.8+**. Nothing else.
+<p align="center">
+  <img src="https://img.shields.io/badge/Docker-required-2496ed" alt="Docker required">
+  <img src="https://img.shields.io/badge/Python-3.8%2B-3776ab" alt="Python 3.8 or newer">
+  <img src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-supported-444" alt="Windows, macOS and Linux">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+</p>
+
+AIM OS (Artificial Intelligence Memory Operating System) is fourteen containers talking over a Redis event bus.
+It keeps your context in a four-tier memory, researches topics on its own, notifies you when something matters
+and answers in a warm, slowed-down voice. Everything it stores stays inside this folder.
+
+## What you can do
+
+- **Talk to it.** Click **MIC** on the dashboard, speak, click again. Or type and press GO. Answers are spoken in a Baymax-style voice.
+- **Give it memory.** A memory engine with four tiers, semantic search and decay keeps what matters and lets the rest fade.
+- **Let it research.** The research agent runs grounded searches, removes duplicates and files the results.
+- **Map a project.** Paste a public git link and Research Mode clones it, scans it, explains how it works and drafts a plan to finish it.
+- **Browse with an agent.** A headless Chromium agent opens pages on request.
+- **Work offline.** With no API keys it runs entirely on local models through Ollama.
+
+## Quick start
+
+You need **Docker** (Desktop or Engine) and **Python 3.8 or newer**. Nothing else.
+
+### 1. Start it
 
 | OS | Start | Stop |
-|----|-------|------|
-| macOS | double-click `start.command` or `./start.sh` | `./stop.sh` |
-| Linux | `./start.sh` | `./stop.sh` |
+|---|---|---|
 | Windows | double-click `start.bat` | `stop.bat` |
+| macOS | double-click `start.command`, or `./start.sh` | `./stop.sh` |
+| Linux | `./start.sh` | `./stop.sh` |
 
-or on any OS: `python aim.py start` / `stop` / `status` / `logs [service]` / `test` / `clean`.
+Or on any OS:
 
-The first start builds images and downloads the local AI models (about 6 GB, in the background).
-The JARVIS dashboard opens at <http://localhost:8888/index.html>.
+```bash
+python aim.py start
+```
 
-## Everything stays in this folder
+The first start builds the images and downloads the local AI models, about 6 GB, in the background. It
+copies `.env.example` to `.env` and fills in random passwords for you.
 
-| What | Where |
-|------|-------|
-| PostgreSQL, Qdrant, Redis data | `./data/postgres`, `./data/qdrant`, `./data/redis` |
-| AI models (gemma3:4b, qwen3:4b, nomic-embed-text) | `./data/ollama` |
-| Baymax voice + speech-recognition models | `./data/voice` |
-| Host-bridge Python environment | `./runtime` |
+### 2. Open the dashboard
 
-Docker itself keeps the built *images* in its own storage; `python aim.py clean` removes them.
-Delete this folder (after `clean`) and nothing is left behind.
+<http://localhost:8888/index.html> opens on its own when the stack is up. Check that every service is healthy with:
+
+```bash
+python aim.py status
+```
+
+### 3. Add API keys (optional)
+
+Put free-tier keys in `.env` to use hosted models. Without them AIM falls back to the local models.
+
+```ini
+GROQ_API_KEY=...
+GOOGLE_API_KEY=...
+TAVILY_API_KEY=...   # live web search in Research Mode
+```
+
+### Everyday commands
+
+```bash
+python aim.py start        # start everything and open the dashboard
+python aim.py stop         # stop everything
+python aim.py status       # health of every service
+python aim.py logs [name]  # follow logs, optionally for one service
+python aim.py test         # run the full test cycle
+python aim.py clean        # stop and remove containers and images (keeps ./data)
+```
 
 ## Services
 
-| Port | Service | Notes |
-|------|---------|-------|
-| 8888 | Dashboard | JARVIS UI, timer (`/timer.html`), Research Center (`/research.html`) |
-| 8001 | LLM Router | Groq / Gemini / local Ollama; falls back to local when offline or no key |
-| 8002 | Timeline | activity log |
-| 8003 | Memory Engine | 4 tiers, semantic search, decay |
-| 8004 | Core Brain | intent + event processing |
-| 8005 | Research Agent | Gemini grounded search + dedupe |
-| 8006 | Notification | cooldown + history |
-| 8007 | Browser Agent | headless Chromium: `POST /browse {"url": ...}` |
-| 8008 | Voice Agent | Baymax voice: `/speak`, `/transcribe`, `/converse` |
-| 11434 | Ollama | local models |
-| 9999 | Host Bridge | runs on your OS: CPU / RAM / disk readout only |
+Every port listens on `localhost` only.
 
-API keys are optional: put `GROQ_API_KEY` / `GOOGLE_API_KEY` in `.env`. Without them everything runs on
-the local models.
+| Port | Service | Notes |
+|---|---|---|
+| 8888 | Dashboard | JARVIS UI, timer (`/timer.html`), Research Center (`/research.html`) |
+| 8001 | LLM Router | Groq, Gemini or local Ollama; falls back to local when offline or without a key |
+| 8002 | Timeline | Activity log |
+| 8003 | Memory Engine | Four tiers, semantic search, decay |
+| 8004 | Core Brain | Intent and event processing |
+| 8005 | Research Agent | Gemini grounded search and deduplication |
+| 8006 | Notification | Cooldown and history |
+| 8007 | Browser Agent | Headless Chromium: `POST /browse {"url": "..."}` |
+| 8008 | Voice Agent | Baymax voice: `/speak`, `/transcribe`, `/converse` |
+| 11435 | Ollama | Local models (`gemma3:4b`, `qwen3:4b`, `nomic-embed-text`) |
+| 6333 | Qdrant | Vector memory |
+| 9999 | Host Bridge | Runs on your computer, not in Docker: CPU, RAM and disk readout only |
+
+## Research Mode
+
+Open <http://localhost:8888/research.html>, or press **RESEARCH MODE** on the dashboard. It draws a live map
+of how a project really works: files, services, links, health and completion.
+
+- **Open project or paste a git link.** Public repos are cloned into `workspace/`, scanned and explained, and you get a plan to finish them.
+- **New project.** *Think with me* finds your motive, then compares three approaches with charts and runs a novelty check on what already exists. Nothing is built before you pick one.
+- **Edit.** Rename, edit tasks and edit files. Only projects inside `workspace/` are editable. AIM OS's own source is read-only there, and `.env` and key files are never served.
+- **Test.** Runs the full test cycle with a verdict, per-layer results and coverage.
+
+Cloned projects get a generated plan that you approve first. Calls are read-only by default and nothing in a cloned project is ever executed.
 
 ## Baymax voice
 
-Click **MIC** in the bottom-right widget of the dashboard, speak, click again. Or type and press GO.
-The voice is a warm male neural voice ([Piper](https://github.com/rhasspy/piper)) slowed, lowered and
-softened to a Baymax style. It is an original voice, not a recording of the character. Swap the base
-voice with `VOICE_MODEL` in `.env` (any Piper voice name, e.g. `en_US-lessac-medium`).
+Click **MIC** in the bottom-right widget of the dashboard. The voice is a warm male neural voice
+([Piper](https://github.com/rhasspy/piper)), slowed, lowered and softened to a Baymax style. It is an original
+voice, not a recording of the character. Change the base voice with `VOICE_MODEL` in `.env`, for example
+`en_US-lessac-medium`.
 
-## Host bridge and privacy
+## Where your data lives
 
-The bridge is the only thing running outside Docker. It listens on localhost only and reports CPU, RAM and disk
-usage to the dashboard. AIM does **not** take screenshots, read window titles or list your processes.
+Everything stays in this folder.
 
-## Research Mode (http://localhost:8888/research.html, or the RESEARCH MODE button on the dashboard)
+| What | Where |
+|---|---|
+| PostgreSQL, Qdrant and Redis data | `./data/postgres`, `./data/qdrant`, `./data/redis` |
+| AI models | `./data/ollama` |
+| Baymax voice and speech-recognition models | `./data/voice` |
+| Host-bridge Python environment | `./runtime` |
 
-A live map of how a project really works: files, services, links, health and completion.
+Docker keeps the built images in its own storage; `python aim.py clean` removes them. Delete this folder after
+`clean` and nothing is left behind.
 
-- **Open project / paste a git link** (public repos): it is cloned into `workspace/`, scanned and explained, and you get a plan to finish it.
-- **New project**: *Think with me* (finds your motive), then a comparison of three approaches with charts, a novelty check
-  (what already exists, where you could stand out), and a planned map. Nothing is built before you pick an approach.
-- **Edit**: rename, edit tasks (some tick themselves from live signals) and edit files. Only projects inside `workspace/`
-  are editable; AIM OS's own source is read-only there, and `.env` / key files are never served.
-- **Test**: the full test cycle below, with a verdict, per-layer results and coverage.
-- Live web search uses **Tavily** (free tier): add `TAVILY_API_KEY=...` to `.env`. Without it, Gemini's own search is the fallback.
+## Security and privacy
+
+- All ports listen on `localhost` only. Websites open in your browser cannot change data: cross-site writes are refused and CORS allows the dashboard only.
+- The browser agent blocks private and internal addresses. Allow specific hosts with `AIM_BROWSE_ALLOW=host1,host2`.
+- The host bridge is the only part outside Docker. It listens on localhost and reports CPU, RAM and disk usage. AIM does **not** take screenshots, read window titles or list your processes.
+- There is no login. This is a local, single-user tool: do not expose it to a network.
+- `.env`, `data/`, `runtime/` and `workspace/` are git-ignored, so keys and personal data never reach the repository.
 
 ## Tests
 
-`python aim.py test` runs static, smoke, API contract (every route, from each service's OpenAPI), data round trips,
-event bus, end-to-end flows, security, performance and link proof. `--chaos` also stops services on purpose and checks
-the map reacts and recovers; `--no-ai` skips tests that use LLMs/web/git. The UI layer (every button on the dashboard
-pages) runs from the page: Research Mode > AIM OS > Test > Run UI tests.
-Uploaded/cloned projects get a generated plan you approve first (read-only calls by default; nothing is ever executed).
+```bash
+python aim.py test             # static, smoke, API contract, data, event bus, flows, security, performance, links
+python aim.py test --no-ai     # skip tests that use LLMs, web or git (uses no quota)
+python aim.py test --chaos     # also stop services on purpose and check they recover (needs Docker CLI)
+```
 
-## Security model
+The UI layer (every button on the dashboard pages) runs from the page: Research Mode, then AIM OS, then Test, then
+**Run UI tests**.
 
-All ports listen on localhost only. Browsers on other websites cannot change data (cross-site writes are refused and CORS is
-dashboard-only). The browser agent blocks private/internal addresses (set `AIM_BROWSE_ALLOW=host1,host2` to allow some).
-There is no login: this is a local, single-user tool.
+## Project layout
 
-## Version control
+```
+aim.py            Launcher: start, stop, status, logs, test, clean
+core/             Brain, LLM router, memory engine
+agents/           Research, browser and voice agents
+services/         Timeline and notification
+apps/             Dashboard, UI pages and timer
+tools/            Host bridge and project scanner
+tests/            Full test cycle
+docker-compose.yml        The stack (docker-compose.gpu.yml adds GPU for Ollama)
+```
 
-The folder is a git repository (`.env`, `data/`, `runtime/` and `workspace/` are ignored). Commit before big changes.
-
-## Project scanner
-
-`python tools/aim_scanner.py --path <project> --out result.json` builds the dependency graph from the command line.
+Scan a project from the command line with `python tools/aim_scanner.py --path <project> --out result.json`.
 
 ## GPU
 
-On Windows/Linux with an NVIDIA GPU and the NVIDIA Container Toolkit, `aim.py` automatically enables
-GPU for Ollama. macOS runs models on CPU inside Docker.
+On Windows or Linux with an NVIDIA GPU and the NVIDIA Container Toolkit, `aim.py` turns on GPU for Ollama
+automatically. macOS runs models on CPU inside Docker.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
