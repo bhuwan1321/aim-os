@@ -11,13 +11,6 @@ Windows, macOS and Linux. Runs locally in Docker. API keys are optional.</p>
   <a href="#research-mode"><b>Research Mode</b></a>
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Docker-required-2496ed" alt="Docker required">
-  <img src="https://img.shields.io/badge/Python-3.8%2B-3776ab" alt="Python 3.8 or newer">
-  <img src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-supported-444" alt="Windows, macOS and Linux">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
-</p>
-
 AIM OS (Artificial Intelligence Memory Operating System) is fourteen containers talking over a Redis event bus.
 It keeps your context in a four-tier memory, researches topics on its own, notifies you when something matters
 and answers in a warm, slowed-down voice. Everything it stores stays inside this folder.
